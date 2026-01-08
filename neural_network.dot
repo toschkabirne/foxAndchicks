@@ -1,0 +1,19 @@
+digraph NeuralNetwork {
+  rankdir=LR;
+  node [shape=circle];
+  "Input 0";
+  "Input 1";
+  "Input 2";
+  "Input 3";
+  "Input 4";
+  "Input 5";
+  "Bias";
+  "Output 0";
+  "Output 1";
+  "Hidden 0";
+  "Input 3" -> "Output 0" [label="-0.21"];
+  "Input 0" -> "Output 1" [label="0.23"];
+  "Input 2" -> "Output 1" [label="0.10"];
+  "Input 4" -> "Output 1" [label="-0.02"];
+  "Input 5" -> "Output 1" [label="0.57"];
+}
