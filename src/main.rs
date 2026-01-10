@@ -10,6 +10,8 @@ use macroquad::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+// use pred_prey_sim::{animals::*, settings::*, spatial_hash::*, brain_neural_network::*};
+
 fn window_conf() -> Conf {
     Conf {
         window_title: "Predator and Prey Simulation".to_string(),
