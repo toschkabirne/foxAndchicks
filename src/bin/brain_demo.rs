@@ -8,7 +8,7 @@ fn main() {
     let mut rng = thread_rng();
 
     let num_inputs = 6;
-    let nn = NeuralNetwork::new(num_inputs, 2, 10, settings::BIAS, &mut rng);
+    let nn = NeuralNetwork::new(num_inputs, 2, 10, settings::bias(), &mut rng);
 
     let dot = nn.to_dot();
     fs::write("neural_network.dot", dot).expect("failed to write neural_network.dot");

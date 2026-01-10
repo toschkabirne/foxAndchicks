@@ -181,12 +181,60 @@ impl NeuralNetwork {
     pub fn mutate<R: Rng>(&mut self, rng: &mut R) {
         let in_bi = self.num_inputs + 1;
 
-        if rng.gen::<f32>() < settings::ADD_NEURON {
-            self.add_neuron();
+        if rng.gen::<f32>() < settings::add_neuron() {
+            // Collect existing connections
+            // Format: (source_id, target_id, weight)
+            let mut connections = Vec::new();
+
+            // From input matrix (inputs+bias -> outputs+hidden)
+            for r in 0..self.input_matrix.len() {
+                for c in 0..self.input_matrix[r].len() {
+                    let w = self.input_matrix[r][c];
+                    if w != 0.0 {
+                        let target = in_bi + r;
+                        let source = c;
+                        connections.push((source, target, w));
+                    }
+                }
+            }
+
+            // From hidden matrix (hidden -> outputs+hidden)
+            for r in 0..self.hidden_matrix.len() {
+                for c in 0..self.hidden_matrix[r].len() {
+                    let w = self.hidden_matrix[r][c];
+                    if w != 0.0 {
+                        let target = in_bi + r;
+                        let source = in_bi + c;
+                        connections.push((source, target, w));
+                    }
+                }
+            }
+
+            if !connections.is_empty() {
+                let idx = rng.gen_range(0..connections.len());
+                let (source, target, weight) = connections[idx];
+
+                // Disable old connection
+                if source < in_bi {
+                    self.input_matrix[target - in_bi][source] = 0.0;
+                } else {
+                    self.hidden_matrix[target - in_bi][source - in_bi] = 0.0;
+                }
+
+                self.add_neuron();
+                let new_neuron_id = self.neuron_number - 1;
+
+                // Add Source -> New (weight = old weight)
+                self.add_connection(source, new_neuron_id, Some(weight), rng);
+
+                // Add New -> Target (weight = old weight)
+                self.add_connection(new_neuron_id, target, Some(weight), rng);
+            }
         }
 
-        if rng.gen::<f32>() < settings::ADD_WEIGHT {
+        if rng.gen::<f32>() < settings::add_weight() {
             let mut sources: Vec<usize> = (0..in_bi).collect();
+
             sources.extend((in_bi + self.num_outputs)..self.neuron_number); // hidden only (no outputs)
 
             let source = sources[rng.gen_range(0..sources.len())];
@@ -208,7 +256,7 @@ impl NeuralNetwork {
             }
         }
 
-        if rng.gen::<f32>() < settings::CHANGE_WEIGHT {
+        if rng.gen::<f32>() < settings::change_weight() {
             for _ in 0..4 {
                 let mut sources: Vec<usize> = (0..in_bi).collect();
                 sources.extend((in_bi + self.num_outputs)..self.neuron_number);

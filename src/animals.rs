@@ -57,8 +57,8 @@ impl Predator {
         let brain = Rc::new(RefCell::new(NeuralNetwork::new(
             settings::NUMBER_SIGHTS_PREDATOR,
             2,
-            settings::PRED_INIT_MUT,
-            settings::BIAS,
+            settings::pred_init_mut(),
+            settings::bias(),
             rng,
         )));
 
@@ -229,8 +229,8 @@ impl Prey {
         let brain = Rc::new(RefCell::new(NeuralNetwork::new(
             settings::NUMBER_SIGHTS_PREY,
             2,
-            settings::PREY_INIT_MUT,
-            settings::BIAS,
+            settings::prey_init_mut(),
+            settings::bias(),
             rng,
         )));
 
