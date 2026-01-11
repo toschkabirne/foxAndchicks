@@ -7,6 +7,9 @@ use macroquad::prelude::*;
 use std::cell::RefCell;
 use std::f32::consts::PI;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
 
 // ---- Helpers (Python equivalents) ----
 pub fn wrap_position(pos: (f32, f32), width: f32, height: f32) -> (f32, f32) {
@@ -30,6 +33,7 @@ pub const PREY_RADIUS: f32 = 7.0;
 // -------------------- Predator --------------------
 #[derive(Clone)]
 pub struct Predator {
+    pub id: usize,
     pub x: f32,
     pub y: f32,
     pub angle: f32,
@@ -62,7 +66,10 @@ impl Predator {
             rng,
         )));
 
+        let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
+
         Self {
+            id,
             x,
             y,
             angle,
@@ -202,6 +209,7 @@ impl Predator {
 // -------------------- Prey --------------------
 #[derive(Clone)]
 pub struct Prey {
+    pub id: usize,
     pub x: f32,
     pub y: f32,
     pub angle: f32,
@@ -234,7 +242,10 @@ impl Prey {
             rng,
         )));
 
+        let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
+
         Self {
+            id,
             x,
             y,
             angle,
