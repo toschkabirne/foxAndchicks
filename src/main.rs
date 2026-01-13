@@ -74,7 +74,7 @@ async fn playback_live() {
     loop {
         clear_background(settings::BACKGROUND_COLOR);
         let frame = game.next_frame();
-        frame.draw();
+        frame.draw(true);
         
         // Optional: break after certain frames or on key press
         if is_key_pressed(KeyCode::Escape) {

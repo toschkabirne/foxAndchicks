@@ -1,4 +1,4 @@
-use crate::settings;
+use crate::settings::{self, MAX_PREY_COUNT};
 use crate::spatial_hash::SpatialHash;
 use crate::animals::{Predator, Prey, PREDATOR_RADIUS, PREY_RADIUS};
 use crate::data_manager::{DataManager, AnimalType, Frame};
@@ -150,7 +150,7 @@ impl Game {
                 let mut prey = prey_rc.borrow_mut();
                 prey.move_step(&inputs);
 
-                if self.preys.len() < 900 {
+                if self.preys.len() < settings::MAX_PREY_COUNT {
                     if let Some(new_prey) = prey.reproduce(&mut rng) {
                         self.preys.push(new_prey);
                     }
@@ -171,7 +171,7 @@ impl Game {
     pub async fn playback(file_name: &str) {
         for frame in DataManager::read_frames(file_name){
             clear_background(settings::BACKGROUND_COLOR);
-            frame.draw();
+            frame.draw(true);
             next_frame().await;
         }
     }

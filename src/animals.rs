@@ -123,7 +123,7 @@ impl Predator {
             .forward_vectorized(inputs, self.energy / settings::PRED_ENERGY);
         let speed_factor = outputs[0];
 
-        self.angle += outputs[1] * PI;
+        self.angle += outputs[1] * 2.0 * PI;
 
         self.x += speed_factor * settings::PREDATOR_SPEED * self.angle.cos();
         self.y += speed_factor * settings::PREDATOR_SPEED * self.angle.sin();
@@ -274,7 +274,7 @@ impl Prey {
             let dist_sq = dx * dx + dy * dy;
 
             // Eating logic: if dist_sq < 100 (10^2)
-            if dist_sq < 100.0 {
+            if dist_sq < PREDATOR_RADIUS * PREDATOR_RADIUS + PREY_RADIUS * PREY_RADIUS {
                 predator.energy = predator
                     .energy
                     .min(settings::PRED_ENERGY)

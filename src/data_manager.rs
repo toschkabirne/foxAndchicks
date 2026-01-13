@@ -98,13 +98,44 @@ impl Frame {
     }
 
     /// Draws all animals in this frame
-    pub fn draw(&self) {
+    pub fn draw(&self, draw_sight_lines: bool) {
         for animal in &self.animals {
             match animal.animal_type {
                 AnimalType::Predator => {
+                    // Draw sight lines for predator
+                    let start_angle = animal.angle - 30.0_f32.to_radians();
+                    let end_angle = animal.angle + 30.0_f32.to_radians();
+
+                    if draw_sight_lines {
+                        for i in 0..settings::NUMBER_SIGHTS_PREDATOR {
+                            let t = if settings::NUMBER_SIGHTS_PREDATOR > 1 {
+                                i as f32 / (settings::NUMBER_SIGHTS_PREDATOR as f32 - 1.0)
+                            } else {
+                                0.0
+                            };
+                            let sight_angle = start_angle + t * (end_angle - start_angle);
+
+                            let end_x = animal.x + settings::SIGHT_RANGE_PREDATOR * sight_angle.cos();
+                            let end_y = animal.y + settings::SIGHT_RANGE_PREDATOR * sight_angle.sin();
+
+                            draw_line(animal.x, animal.y, end_x, end_y, 1.0, YELLOW);
+                        }
                     draw_circle(animal.x, animal.y, PREDATOR_RADIUS, settings::PREDATOR_COLOR);
+                    }
                 }
                 AnimalType::Prey => {
+                    // Draw sight lines for prey
+                    if draw_sight_lines {
+                        for i in 0..settings::NUMBER_SIGHTS_PREY {
+                            let sight_angle =
+                                animal.angle + (360.0 / settings::NUMBER_SIGHTS_PREY as f32).to_radians() * i as f32;
+
+                            let end_x = animal.x + settings::SIGHT_RANGE_PREY * sight_angle.cos();
+                            let end_y = animal.y + settings::SIGHT_RANGE_PREY * sight_angle.sin();
+
+                            draw_line(animal.x, animal.y, end_x, end_y, 1.0, SKYBLUE);
+                        }
+                    }
                     draw_circle(animal.x, animal.y, PREY_RADIUS, settings::PREY_COLOR);
                 }
             }
