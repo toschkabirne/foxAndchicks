@@ -46,3 +46,7 @@ Problems:
     -> I want to be able to turn left and right.
 
 The simulation itself works.
+
+# DataManager
+
+- Also store metadata s.a. max_preds, max_preys, init_NN_weights etc.
