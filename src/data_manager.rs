@@ -9,13 +9,13 @@ use bincode;
 // Needed functionality
 // we want to be able to track animals across frames
 
-#[derive(Debug, Serialize, Deserialize)]
-enum AnimalType {
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum AnimalType {
     Predator = 1,
     Prey = 0,
 }
 
-struct DataManager {
+pub struct DataManager {
     // Fields and methods for managing data
     writer: BufWriter<File>,
 }
@@ -23,36 +23,48 @@ struct DataManager {
 
 impl DataManager {
 
-    fn new(filename: &str) -> Self {
-        let file = File::create(filename).expect("Unable to create file");
+    pub fn new(filename: &str) -> Self {
+        let file = File::create(&filename).expect("Unable to create file");
         let writer = BufWriter::new(file);
         DataManager {
             writer,
         }
     }
 
-    fn store_frame(&mut self, frame: &Frame) {
+    pub fn store_frame(&mut self, frame: &Frame) {
         bincode::serialize_into(&mut self.writer, frame).expect("Failed to write frame");
     }
 
-    fn playback(filename: &str) {
+    /// Returns an iterator that streams frames from a file using buffered reading.
+    /// Each call to `next()` deserializes and returns the next frame.
+    pub fn read_frames(filename: &str) -> FrameReader {
         let file = File::open(filename).expect("Unable to open file");
-        let mut reader = BufReader::new(file);
-
-        while let Ok(frame) = bincode::deserialize_from::<_, Frame>(&mut reader) {
-            println!("{:?}", frame);
-        }
+        let reader = BufReader::new(file);
+        FrameReader { reader }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct Frame {
+/// Iterator that streams frames from a binary file using buffered reading.
+pub struct FrameReader {
+    reader: BufReader<File>,
+}
+
+impl Iterator for FrameReader {
+    type Item = Frame;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        bincode::deserialize_from(&mut self.reader).ok()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Frame {
     pub tick: usize,
     pub animals: Vec<AnimalState>,
 }
 
 impl Frame {
-    fn new(predators: &Vec<Rc<RefCell<Predator>>>, preys: &Vec<Rc<RefCell<Prey>>>, tick: usize) -> Self {
+    pub fn new(predators: &Vec<Rc<RefCell<Predator>>>, preys: &Vec<Rc<RefCell<Prey>>>, tick: usize) -> Self {
         let mut animal_states = Vec::new();
 
         for p in predators.iter() {
@@ -82,21 +94,15 @@ impl Frame {
             animals: animal_states,
         }
     }
-
-    fn to_json(&self) -> String {
-        // Serialize frame data to JSON
-        String::new()
-
-    }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct AnimalState {
-    id: usize,
-    x: f32,
-    y: f32,
-    angle: f32,
-    animal_type: AnimalType,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AnimalState {
+    pub id: usize,
+    pub x: f32,
+    pub y: f32,
+    pub angle: f32,
+    pub animal_type: AnimalType,
 }
 
 ////////////////////////
@@ -156,19 +162,5 @@ mod tests {
         
         dm.store_frame(&frame);
         assert!(std::path::Path::new(filename).exists());
-    }
-
-    #[test]
-    fn test_playback() {
-        let filename = "/tmp/test_playback.bin";
-        let mut dm = DataManager::new(filename);
-        let predators: Vec<Rc<RefCell<Predator>>> = Vec::new();
-        let preys: Vec<Rc<RefCell<Prey>>> = Vec::new();
-        let frame = Frame::new(&predators, &preys, 0);
-        
-        dm.store_frame(&frame);
-        drop(dm);
-        
-        DataManager::playback(filename);
     }
 }

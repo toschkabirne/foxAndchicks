@@ -130,3 +130,13 @@ pub const PREY_MOVING_DECAY: f32 = PRED_ENERGY / (0.2 * (SCREEN_WIDTH as f32));
 // Python:
 // PREY_REST_ENERGY_GAIN = PREY_ENERGY/(4*FRAMES_PER_SECOND)
 pub const PREY_REST_ENERGY_GAIN: f32 = PREY_ENERGY / (4.0 * (FRAMES_PER_SECOND as f32));
+
+// --------------------
+// Colors
+// --------------------
+use macroquad::prelude::Color;
+use macroquad::prelude::{BLACK, RED, BLUE};
+
+pub const BACKGROUND_COLOR: Color = BLACK;
+pub const PREDATOR_COLOR: Color = RED;
+pub const PREY_COLOR: Color = BLUE;
