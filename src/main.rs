@@ -1,10 +1,10 @@
 // src/main.rs
 
-use predatorVsPrey::animals::{Predator, Prey};
 use predatorVsPrey::game::Game;
-use predatorVsPrey::settings;
+use predatorVsPrey::settings::{self, DEFAULT_DATA_FILE};
 
 use macroquad::prelude::*;
+use std::time::Instant;
 
 // use pred_prey_sim::{animals::*, settings::*, spatial_hash::*, brain_neural_network::*};
 
@@ -29,14 +29,58 @@ async fn main() {
     // However, I will try to leave it out for now to satisfy compilation.
     // set_target_fps(settings::FRAMES_PER_SECOND as u32);
 
+    // Get commandline args for filename, else default
+    let args: Vec<String> = std::env::args().collect();
+    let run_live = args[1] == "--run-live";
+    let filename = if args.len() > 2 {
+        &args[2]
+    } else {
+        DEFAULT_DATA_FILE
+    };
 
-    let mut game = predatorVsPrey::game::Game::new_default(
-        "simulation_data.bin",
-    );
+    if run_live {
+        println!("Running live simulation...");
+        playback_live().await;
+    } else {
+        record_then_playback(filename).await;
+    }
+}
 
-    for _ in 0..10000 {
-        game.next_frame();
+async fn record_then_playback(filename: &str) {
+    let mut game = Game::new_default(filename);
+
+    let start_time = Instant::now();
+
+    // Record headless (no rendering)
+    let total_frames = settings::FRAMES_PER_SECOND * 10;
+    for i in 0..total_frames {
+        game.calculate_and_store_next_frame();
+        if i % 500 == 0 {
+            println!("Recording frame {}/{}", i, total_frames);
+        }
     }
 
+    let elapsed = start_time.elapsed();
+    println!("Recording completed in {:.2?}.", elapsed);
+
+    // Playback with visualization
     Game::playback("simulation_data.bin").await;
+}
+
+async fn playback_live() {
+    let mut game = Game::new_default("simulation_data.bin");
+
+    // Run simulation with live rendering
+    loop {
+        clear_background(settings::BACKGROUND_COLOR);
+        let frame = game.next_frame();
+        frame.draw();
+        
+        // Optional: break after certain frames or on key press
+        if is_key_pressed(KeyCode::Escape) {
+            break;
+        }
+        
+        next_frame().await;
+    }
 }

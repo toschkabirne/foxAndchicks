@@ -81,7 +81,7 @@ impl Game {
         )
     }
 
-    pub fn next_frame(&mut self) {
+    pub fn next_frame(&mut self) -> Frame {
         // Logic for updating the game state for the next frame
         self.frame_count += 1;
         let mut rng: ThreadRng = ::rand::thread_rng();
@@ -116,9 +116,6 @@ impl Game {
                 pred.move_step(&inputs);
                 pred.energy < 0.0
             };
-
-            // draw (even if removed from list this frame, like Python loop variable still exists)
-            pred_rc.borrow().draw();
 
             if dead {
                 self.predators.remove(i);
@@ -159,35 +156,23 @@ impl Game {
                     }
                 }
             }
-
-            prey_rc.borrow().draw();
-
-            self.data_manager.store_frame(&Frame::new(&self.predators, &self.preys, self.frame_count));
-
+            
             j += 1;
         }
-        
+
+        return Frame::new(&self.predators, &self.preys, self.frame_count);
+    }
+
+    pub fn calculate_and_store_next_frame(&mut self) {
+        let frame = self.next_frame();
+        self.data_manager.store_frame(&frame);
     }
 
     pub async fn playback(file_name: &str) {
         for frame in DataManager::read_frames(file_name){
             clear_background(settings::BACKGROUND_COLOR);
-            Game::draw_frame(&frame);
+            frame.draw();
             next_frame().await;
-        }
-    }
-
-    /// Draws a single frame during playback, visualizing all animals at their recorded positions.
-    pub fn draw_frame(frame: &Frame) {
-        for animal in &frame.animals {
-            match animal.animal_type {
-                AnimalType::Predator => {
-                    draw_circle(animal.x, animal.y, PREDATOR_RADIUS, settings::PREDATOR_COLOR);
-                }
-                AnimalType::Prey => {
-                    draw_circle(animal.x, animal.y, PREY_RADIUS, settings::PREY_COLOR);
-                }
-            }
         }
     }
 }

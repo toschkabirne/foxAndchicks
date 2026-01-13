@@ -1,10 +1,12 @@
-use crate::animals::{Predator, Prey};
+use crate::animals::{Predator, Prey, PREDATOR_RADIUS, PREY_RADIUS};
+use crate::settings;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::{BufWriter, BufReader};
 use std::rc::Rc;
 use serde::{Serialize, Deserialize};
 use bincode;
+use macroquad::prelude::*;
 
 // Needed functionality
 // we want to be able to track animals across frames
@@ -94,6 +96,20 @@ impl Frame {
             animals: animal_states,
         }
     }
+
+    /// Draws all animals in this frame
+    pub fn draw(&self) {
+        for animal in &self.animals {
+            match animal.animal_type {
+                AnimalType::Predator => {
+                    draw_circle(animal.x, animal.y, PREDATOR_RADIUS, settings::PREDATOR_COLOR);
+                }
+                AnimalType::Prey => {
+                    draw_circle(animal.x, animal.y, PREY_RADIUS, settings::PREY_COLOR);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -111,9 +127,8 @@ pub struct AnimalState {
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::ThreadRng;
-
     use super::*;
+    use ::rand::rngs::ThreadRng;
 
     #[test]
     fn test_animal_state_creation() {

@@ -50,3 +50,7 @@ The simulation itself works.
 # DataManager
 
 - Also store metadata s.a. max_preds, max_preys, init_NN_weights etc.
+
+# Animal
+
+- Create animal class that predator and prey inherit from

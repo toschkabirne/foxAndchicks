@@ -140,3 +140,5 @@ use macroquad::prelude::{BLACK, RED, BLUE};
 pub const BACKGROUND_COLOR: Color = BLACK;
 pub const PREDATOR_COLOR: Color = RED;
 pub const PREY_COLOR: Color = BLUE;
+
+pub const DEFAULT_DATA_FILE: &str = "simulation_data.bin";
