@@ -120,8 +120,8 @@ impl Frame {
 
                             draw_line(animal.x, animal.y, end_x, end_y, 1.0, YELLOW);
                         }
-                    draw_circle(animal.x, animal.y, PREDATOR_RADIUS, settings::PREDATOR_COLOR);
                     }
+                    draw_circle(animal.x, animal.y, PREDATOR_RADIUS, settings::PREDATOR_COLOR);
                 }
                 AnimalType::Prey => {
                     // Draw sight lines for prey
