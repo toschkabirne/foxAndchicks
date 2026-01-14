@@ -83,6 +83,87 @@ So Far best Parameters are (this is by far not the best, but we have to start so
 
 ## 🛠 Project Structure
 
+### Module Overview (goal)
+
+classDiagram
+    %% CORE SIMULATION LOGIC
+    class GameEngine {
+        -int currentTick
+        -bool isRunning
+        +startGame()
+        +pauseGame()
+        +updateLoop()
+        +triggerExport()
+    }
+
+    class Field {
+        -int width
+        -int height
+        -Cell[][] grid
+        +getEntityAt(x, y)
+        +moveEntity(from, to)
+        +removeEntity(id)
+    }
+
+    %% ENTITIES
+    class Animal {
+        <<Abstract>>
+        #int id
+        #float energy
+        #int age
+        #Position location
+        +move()
+        +eat()
+        +reproduce()
+        +die()
+    }
+
+    class Fox {
+        -float huntRange
+        +hunt()
+    }
+
+    class Chick {
+        -float fleeSpeed
+        +flee()
+    }
+
+    %% DATA LAYER
+    class DataManager {
+        +compressData(gameState)
+        +extractData(blob)
+        +saveToStorage(data)
+        +loadFromStorage(id)
+        +streamToModules()
+    }
+
+    class AnalyticsModel {
+        +calculateScore(data)
+        +analyzeTrends(populationData)
+        +generateReport()
+    }
+
+    class Visualizer {
+        +renderFrame(data)
+        +updateUI(stats)
+    }
+
+    %% RELATIONSHIPS
+    GameEngine "1" *-- "1" Field : manages
+    GameEngine "1" o-- "*" Animal : controls
+    
+    Animal <|-- Fox : inherits
+    Animal <|-- Chick : inherits
+    
+    Field o-- Animal : contains
+
+    GameEngine --> DataManager : sends state snapshots
+    
+    DataManager --> AnalyticsModel : feeds data
+    DataManager --> Visualizer : feeds data
+
+### Files
+
 - `main.rs`: for the main visual simulation.
 - `interactive_sim.rs`: to test movement.
 - `headless_runner.rs`: Lightweight simulation script for data gathering.
@@ -92,10 +173,9 @@ So Far best Parameters are (this is by far not the best, but we have to start so
   - `Brain_Neural_Network.rs`: Vectorized Neural Network implementation with mutation logic.
   - `settings.rs`: Global simulation constants and starting values.
 
+
 ## 📝 Observations & Problems
 Current areas for improvement (tracked in `interactive_sim_obersvations.txt`):
 - Improving sight field vectors for multi-neuron triggering.
 - Refining output angle calculations for better maneuverability.
 - Handling "dead" neurons in evolving architectures.
-
-

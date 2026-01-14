@@ -2,3 +2,5 @@ pub mod animals;
 pub mod brain_neural_network;
 pub mod settings;
 pub mod spatial_hash;
+pub mod data_manager;
+pub mod game;
