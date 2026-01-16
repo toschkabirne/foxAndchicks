@@ -1,7 +1,7 @@
 // src/main.rs
 
-use predatorVsPrey::game::Game;
-use predatorVsPrey::settings::{self, DEFAULT_DATA_FILE};
+use predator_vs_prey::game::Game;
+use predator_vs_prey::settings::{self, DEFAULT_DATA_FILE};
 
 use macroquad::prelude::*;
 use std::time::Instant;
@@ -75,12 +75,12 @@ async fn playback_live() {
         clear_background(settings::BACKGROUND_COLOR);
         let frame = game.next_frame();
         frame.draw(true);
-        
+
         // Optional: break after certain frames or on key press
         if is_key_pressed(KeyCode::Escape) {
             break;
         }
-        
+
         next_frame().await;
     }
 }

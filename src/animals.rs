@@ -1,112 +1,202 @@
-use crate::brain_neural_network::{round_ties_even_to_i32, NeuralNetwork};
-use crate::settings;
+use crate::brain_neural_network::NeuralNetwork;
+use crate::settings::*;
 use crate::spatial_hash::HasPos;
 use ::rand::Rng;
 use macroquad::prelude::*;
+use std::iter::IntoIterator;
 
-use std::cell::RefCell;
+use std::collections::HashSet;
 use std::f32::consts::PI;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
 
-// ---- Helpers (Python equivalents) ----
-pub fn wrap_position(pos: (f32, f32), width: f32, height: f32) -> (f32, f32) {
-    let (x, y) = pos;
-    (x.rem_euclid(width), y.rem_euclid(height))
+const TWO_PI: f32 = 2.0 * PI;
+
+// -------------------- Helpers --------------------
+
+#[inline]
+fn next_id() -> usize {
+    // Single-threaded game loop: Relaxed is enough.
+    NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
-pub fn distance(a: (f32, f32), b: (f32, f32)) -> f32 {
-    let dx = a.0 - b.0;
-    let dy = a.1 - b.1;
-    (dx * dx + dy * dy).sqrt()
+#[inline]
+pub fn wrap_position(pos: Vec2, width: f32, height: f32) -> Vec2 {
+    vec2(pos.x.rem_euclid(width), pos.y.rem_euclid(height))
 }
 
+#[inline]
+pub fn distance(a: Vec2, b: Vec2) -> f32 {
+    (a - b).length()
+}
+
+#[inline]
 pub fn normalize_angle(angle: f32) -> f32 {
-    (angle + PI).rem_euclid(2.0 * PI) - PI
+    (angle + PI).rem_euclid(TWO_PI) - PI
 }
 
-pub const PREDATOR_RADIUS: f32 = 10.0;
-pub const PREY_RADIUS: f32 = 7.0;
+#[inline]
+fn angle_lerp(a: f32, b: f32, t: f32) -> f32 {
+    // Simple linear interpolation, then normalized to [-PI, PI]
+    normalize_angle(a + (b - a) * t)
+}
 
-// -------------------- Predator --------------------
+// -------------------- Shared Core --------------------
+
 #[derive(Clone)]
-pub struct Predator {
+pub struct AnimalCore {
     pub id: usize,
-    pub x: f32,
-    pub y: f32,
+    pub pos: Vec2,
     pub angle: f32,
     pub energy: f32,
-    pub brain: Rc<RefCell<NeuralNetwork>>,
+    pub brain: NeuralNetwork,
+}
+
+impl AnimalCore {
+    pub fn new_with_brain(pos: Vec2, angle: f32, energy: f32, brain: NeuralNetwork) -> Self {
+        Self {
+            id: next_id(),
+            pos,
+            angle,
+            energy,
+            brain,
+        }
+    }
+
+    #[inline]
+    pub fn x(&self) -> f32 {
+        self.pos.x
+    }
+
+    #[inline]
+    pub fn y(&self) -> f32 {
+        self.pos.y
+    }
+
+    #[inline]
+    pub fn set_xy(&mut self, x: f32, y: f32) {
+        self.pos = vec2(x, y);
+    }
+}
+
+#[inline]
+fn inherited_brain_with_mutations<R: Rng>(parent: &NeuralNetwork, rng: &mut R) -> NeuralNetwork {
+    let mut brain = parent.clone();
+    let k = rng.gen_range(2..=6);
+    for _ in 0..k {
+        brain.mutate(rng);
+    }
+    brain
+}
+
+#[inline]
+fn move_with_speed_factor(
+    core: &mut AnimalCore,
+    speed_factor: f32,
+    turn_delta: f32,
+    speed: f32,
+    moving_decay: f32,
+    max_energy: f32,
+) {
+    // Turning
+    core.angle = normalize_angle(core.angle + turn_delta);
+
+    // Moving
+    core.pos.x += speed_factor * speed * core.angle.cos();
+    core.pos.y += speed_factor * speed * core.angle.sin();
+
+    // Wrap world
+    core.pos = wrap_position(core.pos, SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32);
+
+    // Movement energy cost
+    core.energy -= (speed_factor * speed_factor) * moving_decay;
+
+    // Keep energy from exploding upward in weird future edits
+    if core.energy > max_energy {
+        core.energy = max_energy;
+    }
+}
+
+// -------------------- Predator --------------------
+
+#[derive(Clone)]
+pub struct Predator {
+    pub core: AnimalCore,
     pub eaten_prey: i32,
 }
 
 impl HasPos for Predator {
     fn x(&self) -> f32 {
-        self.x
+        self.core.x()
     }
     fn y(&self) -> f32 {
-        self.y
+        self.core.y()
     }
     fn set_pos(&mut self, x: f32, y: f32) {
-        self.x = x;
-        self.y = y;
+        self.core.set_xy(x, y);
     }
 }
 
 impl Predator {
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
-        let angle = rng.gen_range(0.0..(2.0 * PI));
-        let brain = Rc::new(RefCell::new(NeuralNetwork::new(
-            settings::NUMBER_SIGHTS_PREDATOR,
-            2,
-            settings::pred_init_mut(),
-            settings::bias(),
-            rng,
-        )));
-
-        let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
+        let angle = rng.gen_range(0.0..TWO_PI);
+        let brain = NeuralNetwork::new(NUMBER_SIGHTS_PREDATOR, 2, pred_init_mut(), bias(), rng);
 
         Self {
-            id,
-            x,
-            y,
-            angle,
-            energy: settings::PRED_ENERGY,
-            brain,
+            core: AnimalCore::new_with_brain(vec2(x, y), angle, PRED_ENERGY, brain),
             eaten_prey: 0,
         }
     }
 
-    pub fn get_inputs(&self, preys: &[Rc<RefCell<Prey>>]) -> Vec<f32> {
-        let mut inputs = vec![0.0; settings::NUMBER_SIGHTS_PREDATOR];
-        let start_angle = self.angle - 30.0_f32.to_radians();
+    #[inline]
+    pub fn id(&self) -> usize {
+        self.core.id
+    }
 
-        let ray_angles: Vec<f32> = (0..settings::NUMBER_SIGHTS_PREDATOR)
-            .map(|i| normalize_angle(start_angle + (i as f32) * 6.0_f32.to_radians()))
-            .collect();
+    /// Predator senses prey in a forward cone (±30°) with NUMBER_SIGHTS_PREDATOR rays.
+    pub fn get_inputs<'a, I>(&self, preys: I) -> Vec<f32>
+    where
+        I: IntoIterator<Item = &'a Prey>,
+    {
+        let n = NUMBER_SIGHTS_PREDATOR.max(1);
+        let mut inputs = vec![0.0; n];
 
-        for prey_rc in preys {
-            let prey = prey_rc.borrow();
-            let dist = distance((self.x, self.y), (prey.x, prey.y));
-            if dist < settings::SIGHT_RANGE_PREDATOR && dist > 0.0 {
-                let angle_to_prey = (prey.y - self.y).atan2(prey.x - self.x);
+        let start_angle = normalize_angle(self.core.angle - 30.0_f32.to_radians());
+        let end_angle = normalize_angle(self.core.angle + 30.0_f32.to_radians());
 
-                let mut val = PREY_RADIUS / dist;
-                if val > 1.0 {
-                    val = 1.0;
+        let predator_pos = self.core.pos;
+
+        for prey in preys {
+            let prey_pos = prey.core.pos;
+            let dist = distance(predator_pos, prey_pos);
+
+            if dist <= 0.0 || dist >= SIGHT_RANGE_PREDATOR {
+                continue;
+            }
+
+            let angle_to_prey = (prey_pos.y - predator_pos.y).atan2(prey_pos.x - predator_pos.x);
+
+            // Angular width of prey "disc" at distance dist.
+            let mut val = PREY_RADIUS / dist;
+            if val > 1.0 {
+                val = 1.0;
+            }
+            let angular_width = val.asin();
+
+            for i in 0..n {
+                if inputs[i] == 1.0 {
+                    continue;
                 }
-                let angular_width = val.asin();
-
-                for i in 0..settings::NUMBER_SIGHTS_PREDATOR {
-                    if inputs[i] == 1.0 {
-                        continue;
-                    }
-                    let diff = normalize_angle(ray_angles[i] - angle_to_prey).abs();
-                    if diff < angular_width {
-                        inputs[i] = 1.0;
-                    }
+                let t = if n > 1 {
+                    i as f32 / (n as f32 - 1.0)
+                } else {
+                    0.0
+                };
+                let ray_angle = angle_lerp(start_angle, end_angle, t);
+                let diff = normalize_angle(ray_angle - angle_to_prey).abs();
+                if diff < angular_width {
+                    inputs[i] = 1.0;
                 }
             }
         }
@@ -115,272 +205,247 @@ impl Predator {
     }
 
     pub fn move_step(&mut self, inputs: &[f32]) {
-        self.energy -= settings::PRED_DEFAULT_DECAY;
+        // Default decay each frame
+        self.core.energy -= PRED_DEFAULT_DECAY;
 
-        let outputs = self
-            .brain
-            .borrow_mut()
-            .forward_vectorized(inputs, self.energy / settings::PRED_ENERGY);
+        let energy_ratio = self.core.energy / PRED_ENERGY;
+        let outputs = self.core.brain.forward_vectorized(inputs, energy_ratio);
+
         let speed_factor = outputs[0];
+        let turn_delta = outputs[1] * TWO_PI;
 
-        self.angle += outputs[1] * 2.0 * PI;
-
-        self.x += speed_factor * settings::PREDATOR_SPEED * self.angle.cos();
-        self.y += speed_factor * settings::PREDATOR_SPEED * self.angle.sin();
-
-        let (nx, ny) = wrap_position(
-            (self.x, self.y),
-            settings::SCREEN_WIDTH as f32,
-            settings::SCREEN_HEIGHT as f32,
+        move_with_speed_factor(
+            &mut self.core,
+            speed_factor,
+            turn_delta,
+            PREDATOR_SPEED,
+            PRED_MOVING_DECAY,
+            PRED_ENERGY,
         );
-        self.x = nx;
-        self.y = ny;
-
-        self.energy -= (speed_factor * speed_factor) * settings::PRED_MOVING_DECAY;
     }
 
-    pub fn hunt(&mut self, preys: &mut Vec<Rc<RefCell<Prey>>>) {
-        let mut i = 0;
-        while i < preys.len() {
-            let is_eaten = {
-                let prey = preys[i].borrow();
-                distance((self.x, self.y), (prey.x, prey.y)) < 10.0
-            };
+    pub fn hunt_nearby<'a, R: Rng, I>(
+        &mut self,
+        prey_candidates: I,
+        eaten_prey_ids: &mut HashSet<usize>,
+        newborn_preds: &mut Vec<Predator>,
+        rng: &mut R,
+    ) where
+        I: IntoIterator<Item = &'a Prey>,
+    {
+        let eat_r = PREDATOR_RADIUS + PREY_RADIUS;
+        let predator_pos = self.core.pos;
 
-            if is_eaten {
-                self.energy = self
-                    .energy
-                    .min(settings::PRED_ENERGY)
-                    .max(self.energy + settings::PREDATOR_ENERGY_GAIN);
+        for prey in prey_candidates {
+            let id = prey.core.id;
+            if eaten_prey_ids.contains(&id) {
+                continue;
+            }
+
+            let prey_pos = prey.core.pos;
+            let dist = distance(predator_pos, prey_pos);
+
+            if dist < eat_r {
+                eaten_prey_ids.insert(id);
+
+                self.core.energy = (self.core.energy + PREDATOR_ENERGY_GAIN).min(PRED_ENERGY);
+
                 self.eaten_prey += 1;
-                preys.remove(i);
-            } else {
-                i += 1;
+
+                if let Some(child) = self.reproduce(rng) {
+                    newborn_preds.push(child);
+                }
+
+                // If you want "max one kill per predator per frame", uncomment:
+                // break;
             }
         }
     }
 
-    pub fn reproduce<R: Rng>(&mut self, rng: &mut R) -> Option<Rc<RefCell<Predator>>> {
-        if self.eaten_prey > 3 {
-            self.eaten_prey = 0;
-
-            let ox = self.x + rng.gen_range(-1..=1) as f32;
-            let oy = self.y + rng.gen_range(-1..=1) as f32;
-
-            let mut offspring = Predator::new(ox, oy, rng);
-
-            // Python: offspring.brain = self.brain (shared reference)
-            offspring.brain = Rc::clone(&self.brain);
-
-            for _ in 0..rng.gen_range(2..=6) {
-                offspring.brain.borrow_mut().mutate(rng);
-            }
-
-            return Some(Rc::new(RefCell::new(offspring)));
+    pub fn reproduce<R: Rng>(&mut self, rng: &mut R) -> Option<Predator> {
+        if self.eaten_prey <= 3 {
+            return None;
         }
-        None
+
+        self.eaten_prey = 0;
+
+        // Tiny offset near parent
+        let ox = self.core.pos.x + rng.gen_range(-1..=1) as f32;
+        let oy = self.core.pos.y + rng.gen_range(-1..=1) as f32;
+
+        // Child gets parent's brain + mutations
+        let mut child = Predator::new(ox, oy, rng);
+        child.core.brain = inherited_brain_with_mutations(&self.core.brain, rng);
+
+        // You can decide if newborn starts full or some split. Keeping your previous behavior:
+        child.core.energy = PRED_ENERGY;
+
+        Some(child)
     }
 
     pub fn draw_sight(&self) {
-        let start_angle = self.angle - 30.0_f32.to_radians();
-        let end_angle = self.angle + 30.0_f32.to_radians();
+        let n = NUMBER_SIGHTS_PREDATOR.max(1);
 
-        for i in 0..settings::NUMBER_SIGHTS_PREDATOR {
-            let t = if settings::NUMBER_SIGHTS_PREDATOR > 1 {
-                i as f32 / (settings::NUMBER_SIGHTS_PREDATOR as f32 - 1.0)
+        let start_angle = self.core.angle - 30.0_f32.to_radians();
+        let end_angle = self.core.angle + 30.0_f32.to_radians();
+
+        for i in 0..n {
+            let t = if n > 1 {
+                i as f32 / (n as f32 - 1.0)
             } else {
                 0.0
             };
             let sight_angle = start_angle + t * (end_angle - start_angle);
 
-            let end_x = self.x + settings::SIGHT_RANGE_PREDATOR * sight_angle.cos();
-            let end_y = self.y + settings::SIGHT_RANGE_PREDATOR * sight_angle.sin();
+            let end_x = self.core.pos.x + SIGHT_RANGE_PREDATOR * sight_angle.cos();
+            let end_y = self.core.pos.y + SIGHT_RANGE_PREDATOR * sight_angle.sin();
 
-            draw_line(self.x, self.y, end_x, end_y, 1.0, YELLOW);
+            draw_line(self.core.pos.x, self.core.pos.y, end_x, end_y, 1.0, YELLOW);
         }
     }
 
     pub fn draw(&self) {
-        draw_circle(self.x, self.y, PREDATOR_RADIUS, RED);
+        draw_circle(self.core.pos.x, self.core.pos.y, PREDATOR_RADIUS, RED);
         self.draw_sight();
     }
 }
 
 // -------------------- Prey --------------------
+
 #[derive(Clone)]
 pub struct Prey {
-    pub id: usize,
-    pub x: f32,
-    pub y: f32,
-    pub angle: f32,
-    pub energy: f32,
+    pub core: AnimalCore,
     pub rest_time: i32,
-    pub brain: Rc<RefCell<NeuralNetwork>>,
 }
 
 impl HasPos for Prey {
     fn x(&self) -> f32 {
-        self.x
+        self.core.x()
     }
     fn y(&self) -> f32 {
-        self.y
+        self.core.y()
     }
     fn set_pos(&mut self, x: f32, y: f32) {
-        self.x = x;
-        self.y = y;
+        self.core.set_xy(x, y);
     }
 }
 
 impl Prey {
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
-        let angle = rng.gen_range(0.0..(2.0 * PI));
-        let brain = Rc::new(RefCell::new(NeuralNetwork::new(
-            settings::NUMBER_SIGHTS_PREY,
-            2,
-            settings::prey_init_mut(),
-            settings::bias(),
-            rng,
-        )));
-
-        let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
+        let angle = rng.gen_range(0.0..TWO_PI);
+        let brain = NeuralNetwork::new(NUMBER_SIGHTS_PREY, 2, prey_init_mut(), bias(), rng);
 
         Self {
-            id,
-            x,
-            y,
-            angle,
-            energy: settings::PREY_ENERGY,
+            core: AnimalCore::new_with_brain(vec2(x, y), angle, PREY_ENERGY, brain),
             rest_time: 0,
-            brain,
         }
     }
 
-    // Python: get_inputs(self, spatialpredators, predators)
-    // Returns None if eaten.
-    pub fn get_inputs<R: Rng>(
-        &self,
-        spatialpredators: &[Rc<RefCell<Predator>>],
-        predators_vec: &mut Vec<Rc<RefCell<Predator>>>,
-        rng: &mut R,
-    ) -> Option<Vec<f32>> {
-        let mut inputs = vec![0.0; settings::NUMBER_SIGHTS_PREY];
-        let sector_size = (360.0 / settings::NUMBER_SIGHTS_PREY as f32).to_radians();
+    #[inline]
+    pub fn id(&self) -> usize {
+        self.core.id
+    }
 
-        for pred_rc in spatialpredators {
-            let mut predator = pred_rc.borrow_mut();
+    /// Prey senses predators in 360° sectors (NUMBER_SIGHTS_PREY bins).
+    pub fn sense_predators<'a, I>(&self, predators: I) -> Vec<f32>
+    where
+        I: IntoIterator<Item = &'a Predator>,
+    {
+        let n = NUMBER_SIGHTS_PREY.max(1);
+        let mut inputs = vec![0.0; n];
 
-            let dx = predator.x - self.x;
-            let dy = predator.y - self.y;
-            let dist_sq = dx * dx + dy * dy;
+        let sector_size = TWO_PI / (n as f32);
+        let prey_pos = self.core.pos;
 
-            // Eating logic: if dist_sq < 100 (10^2)
-            if dist_sq < PREDATOR_RADIUS * PREDATOR_RADIUS + PREY_RADIUS * PREY_RADIUS {
-                predator.energy = predator
-                    .energy
-                    .min(settings::PRED_ENERGY)
-                    .max(predator.energy + settings::PREDATOR_ENERGY_GAIN);
-                predator.eaten_prey += 1;
+        for pred in predators {
+            let pred_pos = pred.core.pos;
+            let dist = distance(prey_pos, pred_pos);
 
-                if let Some(new_pred) = predator.reproduce(rng) {
-                    predators_vec.push(new_pred);
-                }
-
-                return None; // eaten
+            if dist >= SIGHT_RANGE_PREY {
+                continue;
             }
 
-            if dist_sq < settings::SIGHT_RANGE_PREY * settings::SIGHT_RANGE_PREY {
-                let angle_to_pred = dy.atan2(dx);
+            let angle_to_pred = (pred_pos.y - prey_pos.y).atan2(pred_pos.x - prey_pos.x);
+            let rel = normalize_angle(angle_to_pred - self.core.angle); // [-PI, PI]
 
-                let mut rel_angle = angle_to_pred - self.angle;
-                rel_angle = (rel_angle + PI).rem_euclid(2.0 * PI) - PI;
+            // Map [-PI, PI] -> [0, TWO_PI)
+            let shifted = rel + PI;
+            let idx = (shifted / sector_size).floor() as i32;
+            let idx = idx.rem_euclid(n as i32) as usize;
 
-                // idx = int(round(rel_angle / sector_size)) % NUMBER_SIGHTS_PREY
-                let raw = rel_angle / sector_size;
-                let idx = round_ties_even_to_i32(raw)
-                    .rem_euclid(settings::NUMBER_SIGHTS_PREY as i32)
-                    as usize;
-
-                inputs[idx] = 1.0;
-            }
+            inputs[idx] = 1.0;
         }
 
-        Some(inputs)
+        inputs
     }
 
     pub fn move_step(&mut self, inputs: &[f32]) {
-        let outputs = self
-            .brain
-            .borrow_mut()
-            .forward_vectorized(inputs, self.energy / settings::PREY_ENERGY);
+        let energy_ratio = self.core.energy / PREY_ENERGY;
+        let outputs = self.core.brain.forward_vectorized(inputs, energy_ratio);
+
         let speed_factor = outputs[0];
 
-        // rest threshold
+        // Rest threshold: if barely moving, recover energy and do not move.
         if speed_factor < 0.05 {
-            self.energy =
-                (self.energy + settings::PREY_REST_ENERGY_GAIN).min(settings::PREY_ENERGY);
+            self.core.energy = (self.core.energy + PREY_REST_ENERGY_GAIN).min(PREY_ENERGY);
             return;
         }
 
-        if self.energy < 0.0 {
+        if self.core.energy < 0.0 {
             return;
         }
 
-        self.angle += outputs[1] * PI;
+        let turn_delta = outputs[1] * PI;
 
-        self.x += speed_factor * settings::PREY_SPEED * self.angle.cos();
-        self.y += speed_factor * settings::PREY_SPEED * self.angle.sin();
-
-        let (nx, ny) = wrap_position(
-            (self.x, self.y),
-            settings::SCREEN_WIDTH as f32,
-            settings::SCREEN_HEIGHT as f32,
+        move_with_speed_factor(
+            &mut self.core,
+            speed_factor,
+            turn_delta,
+            PREY_SPEED,
+            PREY_MOVING_DECAY,
+            PREY_ENERGY,
         );
-        self.x = nx;
-        self.y = ny;
-
-        self.energy -= (speed_factor * speed_factor) * settings::PREY_MOVING_DECAY;
     }
 
-    pub fn reproduce<R: Rng>(&mut self, rng: &mut R) -> Option<Rc<RefCell<Prey>>> {
+    pub fn reproduce<R: Rng>(&mut self, rng: &mut R) -> Option<Prey> {
         self.rest_time += 1;
-        let threshold =
-            (settings::PREY_REPRODUCATION_RATE * settings::FRAMES_PER_SECOND as f32) as i32;
 
-        if self.rest_time >= threshold {
-            self.rest_time = 0;
+        let threshold = (PREY_REPRODUCATION_RATE * FRAMES_PER_SECOND as f32) as i32;
 
-            let ox = rng.gen_range((self.x as i32 - 50)..=(self.x as i32 + 50)) as f32;
-            let oy = rng.gen_range((self.y as i32 - 50)..=(self.y as i32 + 50)) as f32;
-
-            let mut offspring = Prey::new(ox, oy, rng);
-
-            // Python: offspring.brain = self.brain (shared reference)
-            offspring.brain = Rc::clone(&self.brain);
-
-            for _ in 0..rng.gen_range(2..=6) {
-                offspring.brain.borrow_mut().mutate(rng);
-            }
-
-            return Some(Rc::new(RefCell::new(offspring)));
+        if self.rest_time < threshold {
+            return None;
         }
 
-        None
+        self.rest_time = 0;
+
+        // Random offset within +-50 px
+        let ox =
+            rng.gen_range((self.core.pos.x as i32 - 50)..=(self.core.pos.x as i32 + 50)) as f32;
+        let oy =
+            rng.gen_range((self.core.pos.y as i32 - 50)..=(self.core.pos.y as i32 + 50)) as f32;
+
+        let mut child = Prey::new(ox, oy, rng);
+        child.core.brain = inherited_brain_with_mutations(&self.core.brain, rng);
+
+        Some(child)
     }
 
     pub fn draw_sight(&self) {
-        for i in 0..settings::NUMBER_SIGHTS_PREY {
-            let sight_angle =
-                self.angle + (360.0 / settings::NUMBER_SIGHTS_PREY as f32).to_radians() * i as f32;
+        let n = NUMBER_SIGHTS_PREY.max(1);
+        let step = TWO_PI / (n as f32);
 
-            let end_x = self.x + settings::SIGHT_RANGE_PREY * sight_angle.cos();
-            let end_y = self.y + settings::SIGHT_RANGE_PREY * sight_angle.sin();
+        for i in 0..n {
+            let sight_angle = self.core.angle + step * (i as f32);
 
-            draw_line(self.x, self.y, end_x, end_y, 1.0, SKYBLUE);
+            let end_x = self.core.pos.x + SIGHT_RANGE_PREY * sight_angle.cos();
+            let end_y = self.core.pos.y + SIGHT_RANGE_PREY * sight_angle.sin();
+
+            draw_line(self.core.pos.x, self.core.pos.y, end_x, end_y, 1.0, SKYBLUE);
         }
     }
 
     pub fn draw(&self) {
-        draw_circle(self.x, self.y, PREY_RADIUS, GREEN);
+        draw_circle(self.core.pos.x, self.core.pos.y, PREY_RADIUS, GREEN);
         self.draw_sight();
     }
 }
