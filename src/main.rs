@@ -19,34 +19,47 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    // macroquad sets target fps implicitly via frame time, but let's see if we can just cap it or rely on vsync.
-    // Rust macroquad doesn't have set_target_fps exposed directly in prelude in recent versions?
-    // Checking docs: 'set_target_fps' is not in standard macroquad 0.4 prelude?
-    // Actually, usually users just use window conf or await next_frame().
-    // But the error said `set_target_fps` not found.
-    // We can try to remove it or find where it is.
-    // For now I will comment it out as it is not critical for basic wiring, or use a proper alternative if I knew one.
-    // However, I will try to leave it out for now to satisfy compilation.
-    // set_target_fps(settings::FRAMES_PER_SECOND as u32);
-
     // Get commandline args for filename, else default
-    let args: Vec<String> = std::env::args().collect();
-    let run_live = args[1] == "--run-live";
-    let filename = if args.len() > 2 {
-        &args[2]
-    } else {
-        DEFAULT_DATA_FILE
-    };
+    // Minimal CLI parsing (robust, no panics)
+    let mut run_live = false;
+    let mut draw_sight_lines = true;
+    let mut filename: String = DEFAULT_DATA_FILE.to_string();
+
+    let mut it = std::env::args().skip(1);
+    while let Some(arg) = it.next() {
+        match arg.as_str() {
+            "--run-live" => run_live = true,
+            "--no-sight" | "--no-sight-lines" => draw_sight_lines = false,
+            "--file" | "-f" => {
+                filename = it.next().unwrap_or_else(|| DEFAULT_DATA_FILE.to_string());
+            }
+            "--help" | "-h" => {
+                println!("Usage:");
+                println!("  cargo run -- [--run-live] [--no-sight] [--file <path>]");
+                println!();
+                println!("Examples:");
+                println!("  cargo run -- --run-live");
+                println!("  cargo run -- --run-live --no-sight");
+                println!("  cargo run -- --file simulation_data.bin");
+                println!("  cargo run -- --file simulation_data.bin --no-sight");
+                return;
+            }
+            other => {
+                // Convenience: treat unknown single arg as filename
+                filename = other.to_string();
+            }
+        }
+    }
 
     if run_live {
         println!("Running live simulation...");
-        playback_live().await;
+        playback_live(&filename, draw_sight_lines).await;
     } else {
-        record_then_playback(filename).await;
+        record_then_playback(&filename, draw_sight_lines).await;
     }
 }
 
-async fn record_then_playback(filename: &str) {
+async fn record_then_playback(filename: &str, draw_sight_lines: bool) {
     let mut game = Game::new_default(filename);
 
     let start_time = Instant::now();
@@ -61,20 +74,21 @@ async fn record_then_playback(filename: &str) {
     }
 
     let elapsed = start_time.elapsed();
-    println!("Recording completed in {:.2?}.", elapsed);
+    // IMPORTANT: close/flush the writer before reading the file for playback
+    drop(game);
 
     // Playback with visualization
-    Game::playback("simulation_data.bin").await;
+    Game::playback(filename, draw_sight_lines).await;
 }
 
-async fn playback_live() {
-    let mut game = Game::new_default("simulation_data.bin");
+async fn playback_live(filename: &str, draw_sight_lines: bool) {
+    let mut game = Game::new_default(filename);
 
     // Run simulation with live rendering
     loop {
         clear_background(settings::BACKGROUND_COLOR);
         let frame = game.next_frame();
-        frame.draw(true);
+        frame.draw(draw_sight_lines);
 
         // Optional: break after certain frames or on key press
         if is_key_pressed(KeyCode::Escape) {
