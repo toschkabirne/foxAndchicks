@@ -1,18 +1,18 @@
 use ::rand::thread_rng;
 // use ::rand::Rng;
-
+use crate::settings::*;
 use macroquad::prelude::*;
 use std::io::{self, Write};
 
-use predatorVsPrey::animals::{Predator, Prey};
-use predatorVsPrey::brain_neural_network::NeuralNetwork;
-use predatorVsPrey::settings;
+use predator_vs_prey::animals::{distance, Predator, Prey};
+use predator_vs_prey::brain_neural_network::NeuralNetwork;
+use predator_vs_prey::*;
 
 fn window_conf() -> Conf {
     Conf {
         window_title: "Interactive Predator-Prey".to_string(),
-        window_width: settings::SCREEN_WIDTH,
-        window_height: settings::SCREEN_HEIGHT,
+        window_width: SCREEN_WIDTH,
+        window_height: SCREEN_HEIGHT,
         ..Default::default()
     }
 }
@@ -50,7 +50,7 @@ fn move_predator_with_keyboard(pred: &mut Predator) {
     // Down: move backward a bit
     // Shift: faster
     let mut turn = 0.08;
-    let mut speed = settings::PREDATOR_SPEED;
+    let mut speed = PREDATOR_SPEED;
 
     if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
         turn *= 1.7;
@@ -58,14 +58,14 @@ fn move_predator_with_keyboard(pred: &mut Predator) {
     }
 
     if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
-        pred.angle -= turn;
+        pred.core.angle -= turn;
     }
     if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
-        pred.angle += turn;
+        pred.core.angle += turn;
     }
 
     // Energy decay ähnlich Predator.move_step, aber speed_factor “manuell”
-    pred.energy -= settings::PRED_DEFAULT_DECAY;
+    pred.core.energy -= PRED_DEFAULT_DECAY;
 
     let mut speed_factor = 0.0;
     if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) {
@@ -75,15 +75,15 @@ fn move_predator_with_keyboard(pred: &mut Predator) {
     }
 
     if speed_factor != 0.0 {
-        pred.x += speed_factor * speed * pred.angle.cos();
-        pred.y += speed_factor * speed * pred.angle.sin();
+        pred.core.pos.x += speed_factor * speed * pred.core.angle.cos();
+        pred.core.pos.y += speed_factor * speed * pred.core.angle.sin();
 
         // wrap_position analog zu animals.rs
-        pred.x = pred.x.rem_euclid(settings::SCREEN_WIDTH as f32);
-        pred.y = pred.y.rem_euclid(settings::SCREEN_HEIGHT as f32);
+        pred.core.pos.x = pred.core.pos.x.rem_euclid(SCREEN_WIDTH as f32);
+        pred.core.pos.y = pred.core.pos.y.rem_euclid(SCREEN_HEIGHT as f32);
 
         // Quadratic-ish movement decay (wie im Original, nur mit manuellem speed_factor)
-        pred.energy -= (speed_factor * speed_factor) * settings::PRED_MOVING_DECAY;
+        pred.core.energy -= (speed_factor * speed_factor) * PRED_MOVING_DECAY;
     }
 }
 
@@ -93,12 +93,15 @@ fn rgb(r: u8, g: u8, b: u8) -> Color {
 
 // draw_neural_network(screen, prey.brain, 10, 10, 240, 320) in macroquad
 fn draw_neural_network(nn: &NeuralNetwork, x: f32, y: f32, width: f32, height: f32) {
-    let Some(inputs) = nn.last_inputs.as_ref() else {
+    if nn.last_inputs.is_empty() {
         return;
-    };
-    let Some(activations) = nn.last_activations.as_ref() else {
+    }
+    let inputs = &nn.last_inputs;
+
+    if nn.last_activations.is_empty() {
         return;
-    };
+    }
+    let activations = &nn.last_activations;
 
     // Frame & background (Python: white fill + black frame)
     draw_rectangle(x, y, width, height, WHITE);
@@ -251,30 +254,24 @@ async fn main() {
 
     // Spawn entities
     let mut prey = Prey::new(
-        (settings::SCREEN_WIDTH / 2) as f32,
-        (settings::SCREEN_HEIGHT / 2) as f32,
+        (SCREEN_WIDTH / 2) as f32,
+        (SCREEN_HEIGHT / 2) as f32,
         &mut rng,
     );
 
     let mut predator = Predator::new(
-        (settings::SCREEN_WIDTH / 2 + 200) as f32,
-        (settings::SCREEN_HEIGHT / 2) as f32,
+        (SCREEN_WIDTH / 2 + 200) as f32,
+        (SCREEN_HEIGHT / 2) as f32,
         &mut rng,
     );
 
     // Face left
-    predator.angle = std::f32::consts::PI;
+    predator.core.angle = std::f32::consts::PI;
 
     // Apply user-chosen mutations to prey brain
-    prey.brain = std::rc::Rc::new(std::cell::RefCell::new(NeuralNetwork::new(
-        settings::NUMBER_SIGHTS_PREY,
-        2,
-        mutations,
-        settings::bias(),
-        &mut rng,
-    )));
+    prey.core.brain = NeuralNetwork::new(NUMBER_SIGHTS_PREY, 2, mutations, bias(), &mut rng);
 
-    // set_target_fps(settings::FRAMES_PER_SECOND as u32);
+    // set_target_fps(FRAMES_PER_SECOND as u32);
 
     loop {
         if is_key_pressed(KeyCode::Escape) {
@@ -284,33 +281,20 @@ async fn main() {
         // Controlled predator movement
         move_predator_with_keyboard(&mut predator);
 
-        // Prey inputs: pass [predator] for spatialpredators and predators list
-        // Problem: get_inputs wants &slice and &mut Vec simultaneously, so we clone RC list.
-        let mut predators_vec = vec![std::rc::Rc::new(std::cell::RefCell::new(predator.clone()))];
-        let spatial_preds = predators_vec.clone();
-
-        // get inputs (None if eaten)
-        let inputs_opt = {
-            // prey.get_inputs borrows predators mutably via RefCell
-            prey.get_inputs(&spatial_preds, &mut predators_vec, &mut rng)
-        };
-
-        if inputs_opt.is_none() {
+        // "Eaten" check: simple collision (Predator circle intersects Prey circle)
+        let eat_r = PREDATOR_RADIUS + PREY_RADIUS;
+        if distance(predator.core.pos, prey.core.pos) < eat_r {
             println!("Prey eaten! Spawning new prey.");
             prey = Prey::new(
-                (settings::SCREEN_WIDTH / 2) as f32,
-                (settings::SCREEN_HEIGHT / 2) as f32,
+                (SCREEN_WIDTH / 2) as f32,
+                (SCREEN_HEIGHT / 2) as f32,
                 &mut rng,
             );
-            prey.brain = std::rc::Rc::new(std::cell::RefCell::new(NeuralNetwork::new(
-                settings::NUMBER_SIGHTS_PREY,
-                2,
-                mutations,
-                settings::bias(),
-                &mut rng,
-            )));
+            prey.core.brain =
+                NeuralNetwork::new(NUMBER_SIGHTS_PREY, 2, mutations, bias(), &mut rng);
         } else {
-            let inputs = inputs_opt.unwrap();
+            // Inputs: prey senses predator without any allocations / Rc / RefCell
+            let inputs = prey.sense_predators(std::iter::once(&predator));
             prey.move_step(&inputs);
         }
 
@@ -320,8 +304,8 @@ async fn main() {
         prey.draw();
 
         // Draw neural network overlay
-        let nn_ref = prey.brain.borrow();
-        draw_neural_network(&nn_ref, 10.0, 10.0, 240.0, 320.0);
+        let nn_ref = &prey.core.brain;
+        draw_neural_network(nn_ref, 10.0, 10.0, 240.0, 320.0);
 
         next_frame().await;
     }

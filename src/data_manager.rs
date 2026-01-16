@@ -1,12 +1,10 @@
-use crate::animals::{Predator, Prey, PREDATOR_RADIUS, PREY_RADIUS};
-use crate::settings;
-use std::cell::RefCell;
-use std::fs::File;
-use std::io::{BufWriter, BufReader};
-use std::rc::Rc;
-use serde::{Serialize, Deserialize};
+use crate::animals::{Predator, Prey};
+use crate::settings::*;
 use bincode;
 use macroquad::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 
 // Needed functionality
 // we want to be able to track animals across frames
@@ -22,15 +20,11 @@ pub struct DataManager {
     writer: BufWriter<File>,
 }
 
-
 impl DataManager {
-
     pub fn new(filename: &str) -> Self {
         let file = File::create(&filename).expect("Unable to create file");
         let writer = BufWriter::new(file);
-        DataManager {
-            writer,
-        }
+        DataManager { writer }
     }
 
     pub fn store_frame(&mut self, frame: &Frame) {
@@ -66,33 +60,31 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(predators: &Vec<Rc<RefCell<Predator>>>, preys: &Vec<Rc<RefCell<Prey>>>, tick: usize) -> Self {
-        let mut animal_states = Vec::new();
+    pub fn new(predators: &Vec<Predator>, preys: &Vec<Prey>, tick: usize) -> Self {
+        let mut animal_states = Vec::with_capacity(predators.len() + preys.len());
 
         for p in predators.iter() {
-            let p_borrow = p.borrow();
             animal_states.push(AnimalState {
-                id: p_borrow.id,
-                x: p_borrow.x,
-                y: p_borrow.y,
-                angle: p_borrow.angle,
+                id: p.core.id,
+                x: p.core.pos.x,
+                y: p.core.pos.y,
+                angle: p.core.angle,
                 animal_type: AnimalType::Predator,
             });
         }
 
         for p in preys.iter() {
-            let p_borrow = p.borrow();
             animal_states.push(AnimalState {
-                id: p_borrow.id,
-                x: p_borrow.x,
-                y: p_borrow.y,
-                angle: p_borrow.angle,
+                id: p.core.id,
+                x: p.core.pos.x,
+                y: p.core.pos.y,
+                angle: p.core.angle,
                 animal_type: AnimalType::Prey,
             });
         }
 
         Frame {
-            tick: tick,
+            tick,
             animals: animal_states,
         }
     }
@@ -107,36 +99,36 @@ impl Frame {
                     let end_angle = animal.angle + 30.0_f32.to_radians();
 
                     if draw_sight_lines {
-                        for i in 0..settings::NUMBER_SIGHTS_PREDATOR {
-                            let t = if settings::NUMBER_SIGHTS_PREDATOR > 1 {
-                                i as f32 / (settings::NUMBER_SIGHTS_PREDATOR as f32 - 1.0)
+                        for i in 0..NUMBER_SIGHTS_PREDATOR {
+                            let t = if NUMBER_SIGHTS_PREDATOR > 1 {
+                                i as f32 / (NUMBER_SIGHTS_PREDATOR as f32 - 1.0)
                             } else {
                                 0.0
                             };
                             let sight_angle = start_angle + t * (end_angle - start_angle);
 
-                            let end_x = animal.x + settings::SIGHT_RANGE_PREDATOR * sight_angle.cos();
-                            let end_y = animal.y + settings::SIGHT_RANGE_PREDATOR * sight_angle.sin();
+                            let end_x = animal.x + SIGHT_RANGE_PREDATOR * sight_angle.cos();
+                            let end_y = animal.y + SIGHT_RANGE_PREDATOR * sight_angle.sin();
 
                             draw_line(animal.x, animal.y, end_x, end_y, 1.0, YELLOW);
                         }
                     }
-                    draw_circle(animal.x, animal.y, PREDATOR_RADIUS, settings::PREDATOR_COLOR);
+                    draw_circle(animal.x, animal.y, PREDATOR_RADIUS, PREDATOR_COLOR);
                 }
                 AnimalType::Prey => {
                     // Draw sight lines for prey
                     if draw_sight_lines {
-                        for i in 0..settings::NUMBER_SIGHTS_PREY {
-                            let sight_angle =
-                                animal.angle + (360.0 / settings::NUMBER_SIGHTS_PREY as f32).to_radians() * i as f32;
+                        for i in 0..NUMBER_SIGHTS_PREY {
+                            let sight_angle = animal.angle
+                                + (360.0 / NUMBER_SIGHTS_PREY as f32).to_radians() * i as f32;
 
-                            let end_x = animal.x + settings::SIGHT_RANGE_PREY * sight_angle.cos();
-                            let end_y = animal.y + settings::SIGHT_RANGE_PREY * sight_angle.sin();
+                            let end_x = animal.x + SIGHT_RANGE_PREY * sight_angle.cos();
+                            let end_y = animal.y + SIGHT_RANGE_PREY * sight_angle.sin();
 
                             draw_line(animal.x, animal.y, end_x, end_y, 1.0, SKYBLUE);
                         }
                     }
-                    draw_circle(animal.x, animal.y, PREY_RADIUS, settings::PREY_COLOR);
+                    draw_circle(animal.x, animal.y, PREY_RADIUS, PREY_COLOR);
                 }
             }
         }
@@ -177,8 +169,8 @@ mod tests {
 
     #[test]
     fn test_frame_creation_empty() {
-        let predators: Vec<Rc<RefCell<Predator>>> = Vec::new();
-        let preys: Vec<Rc<RefCell<Prey>>> = Vec::new();
+        let predators: Vec<Predator> = Vec::new();
+        let preys: Vec<Prey> = Vec::new();
         let frame = Frame::new(&predators, &preys, 0);
         assert_eq!(frame.animals.len(), 0);
     }
@@ -186,13 +178,13 @@ mod tests {
     #[test]
     fn test_frame_creation_with_animals() {
         let mut rng: ThreadRng = ::rand::thread_rng();
-        let predator = Rc::new(RefCell::new(Predator::new(10.0, 20.0, &mut rng)));
-        let prey = Rc::new(RefCell::new(Prey::new(30.0, 40.0, &mut rng)));
-        
+        let predator = Predator::new(10.0, 20.0, &mut rng);
+        let prey = Prey::new(30.0, 40.0, &mut rng);
+
         let predators = vec![predator];
         let preys = vec![prey];
         let frame = Frame::new(&predators, &preys, 0);
-        
+
         assert_eq!(frame.animals.len(), 2);
         assert_eq!(frame.animals[0].id, 1);
         assert_eq!(frame.animals[1].id, 2);
@@ -202,10 +194,10 @@ mod tests {
     fn test_store_frame() {
         let filename = "/tmp/test_store_frame.bin";
         let mut dm = DataManager::new(filename);
-        let predators: Vec<Rc<RefCell<Predator>>> = Vec::new();
-        let preys: Vec<Rc<RefCell<Prey>>> = Vec::new();
+        let predators: Vec<Predator> = Vec::new();
+        let preys: Vec<Prey> = Vec::new();
         let frame = Frame::new(&predators, &preys, 0);
-        
+
         dm.store_frame(&frame);
         assert!(std::path::Path::new(filename).exists());
     }

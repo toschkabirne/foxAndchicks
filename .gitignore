@@ -9,3 +9,5 @@ Cargo.lock
 .idea/
 .vscode/
 *.log
+src/old_animals.rs
+Presentation_Notes.txt

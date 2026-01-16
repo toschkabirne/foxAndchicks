@@ -1,60 +1,73 @@
-use crate::settings::{self, MAX_PREY_COUNT};
+use crate::animals::{Predator, Prey};
+use crate::data_manager::{DataManager, Frame};
+use crate::settings::{self};
 use crate::spatial_hash::SpatialHash;
-use crate::animals::{Predator, Prey, PREDATOR_RADIUS, PREY_RADIUS};
-use crate::data_manager::{DataManager, AnimalType, Frame};
-use macroquad::prelude::*;
-use ::rand::Rng;
 use ::rand::rngs::ThreadRng;
-use std::cell::RefCell;
-use std::rc::Rc;
-
+use ::rand::Rng;
+use macroquad::prelude::*;
+use std::collections::HashSet;
 // main structs and logic for the game itself -> main should be light, just setup and loop
-pub struct Game{
+pub struct Game {
     pub frame_count: usize,
-    predators: Vec<Rc<RefCell<Predator>>>,
-    preys: Vec<Rc<RefCell<Prey>>>,
-    spatial_hash_preds: SpatialHash<Predator>,
-    spatial_hash_preys: SpatialHash<Prey>,
+    predators: Vec<Predator>,
+    preys: Vec<Prey>,
+    spatial_hash_preds: SpatialHash,
+    spatial_hash_preys: SpatialHash,
     max_predators: usize,
     max_preys: usize,
     data_manager: DataManager,
+    scratch_idxs: Vec<usize>,
 }
 
+impl Game {
+    pub fn predator_count(&self) -> usize {
+        self.predators.len()
+    }
+    pub fn prey_count(&self) -> usize {
+        self.preys.len()
+    }
+}
 
 impl Game {
     /// Creates a new Game with custom parameters
-    pub fn new(file_name: &str, num_preds: usize, num_preys: usize, max_preds: usize, max_preys: usize) -> Self {
-
+    pub fn new(
+        file_name: &str,
+        num_preds: usize,
+        num_preys: usize,
+        max_preds: usize,
+        max_preys: usize,
+    ) -> Self {
         let mut rng = ::rand::thread_rng();
 
         // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
-        let predators: Vec<Rc<RefCell<Predator>>> = (0..num_preds)
+        let predators: Vec<Predator> = (0..num_preds)
             .map(|_| {
-                Rc::new(RefCell::new(Predator::new(
+                Predator::new(
                     rng.gen_range(0.0..settings::SCREEN_WIDTH as f32),
                     rng.gen_range(0.0..settings::SCREEN_HEIGHT as f32),
                     &mut rng,
-                )))
+                )
             })
             .collect();
 
-        let preys: Vec<Rc<RefCell<Prey>>> = (0..num_preys)
+        let preys: Vec<Prey> = (0..num_preys)
             .map(|_| {
-                Rc::new(RefCell::new(Prey::new(
+                Prey::new(
                     rng.gen_range(0.0..settings::SCREEN_WIDTH as f32),
                     rng.gen_range(0.0..settings::SCREEN_HEIGHT as f32),
                     &mut rng,
-                )))
+                )
             })
             .collect();
 
         // Set up spatial hash
         let cell_pred =
             ((settings::SCREEN_WIDTH as f32) / settings::SIGHT_RANGE_PREDATOR).floor() as i32;
-        let cell_prey = ((settings::SCREEN_WIDTH as f32) / settings::SIGHT_RANGE_PREY).floor() as i32;
+        let cell_prey =
+            ((settings::SCREEN_WIDTH as f32) / settings::SIGHT_RANGE_PREY).floor() as i32;
 
-        let spatial_hash_preds: SpatialHash<Predator> = SpatialHash::new(cell_pred);
-        let spatial_hash_preys: SpatialHash<Prey> = SpatialHash::new(cell_prey);
+        let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_pred);
+        let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_prey);
 
         let data_manager: DataManager = DataManager::new(file_name);
 
@@ -67,6 +80,7 @@ impl Game {
             max_predators: max_preds,
             max_preys: max_preys,
             data_manager,
+            scratch_idxs: Vec::with_capacity(128),
         }
     }
 
@@ -82,85 +96,99 @@ impl Game {
     }
 
     pub fn next_frame(&mut self) -> Frame {
-        // Logic for updating the game state for the next frame
         self.frame_count += 1;
         let mut rng: ThreadRng = ::rand::thread_rng();
 
-        // Clear spatial hashes
-        self.spatial_hash_preds.clear();
-        self.spatial_hash_preys.clear();
+        // ----------------------------
+        // PREDATOR PHASE
+        // ----------------------------
 
-        // Insert all predators + preys into spatial hashes
-        for p in &self.predators {
-            self.spatial_hash_preds.insert(Rc::clone(p));
-        }
-        for pr in &self.preys {
-            self.spatial_hash_preys.insert(Rc::clone(pr));
-        }
+        // Build PREY hash (preys are still at "start of frame" positions)
+        self.spatial_hash_preys.rebuild_from(&self.preys);
 
-        // --- Predator update/draw ---
-        let mut i = 0;
-        while i < self.predators.len() {
-            let pred_rc = Rc::clone(&self.predators[i]);
-            let (px, py) = {
-                let pred = pred_rc.borrow();
-                (pred.x, pred.y)
-            };
+        let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
+        let mut newborn_preds: Vec<Predator> = Vec::new();
 
-            let nearby_preys = self.spatial_hash_preys.query(px, py);
+        // Drain predators to avoid borrow conflicts (same pattern as before, but now it's cheap)
+        let mut surviving_preds: Vec<Predator> = Vec::with_capacity(self.predators.len());
 
-            // get NN inputs from nearby preys and move
-            let dead = {
-                let mut pred = pred_rc.borrow_mut();
-                let inputs = pred.get_inputs(&nearby_preys);
-                pred.move_step(&inputs);
-                pred.energy < 0.0
-            };
+        for mut pred in self.predators.drain(..) {
+            // Sense nearby preys at current predator position
+            let px = pred.core.pos.x;
+            let py = pred.core.pos.y;
 
-            if dead {
-                self.predators.remove(i);
-            } else {
-                i += 1;
+            self.spatial_hash_preys
+                .query_into(&mut self.scratch_idxs, px, py);
+            let inputs = pred.get_inputs(self.scratch_idxs.iter().map(|&i| &self.preys[i]));
+
+            pred.move_step(&inputs);
+
+            // Hunt near new position (preys haven't moved yet)
+            self.spatial_hash_preys.query_into(
+                &mut self.scratch_idxs,
+                pred.core.pos.x,
+                pred.core.pos.y,
+            );
+            pred.hunt_nearby(
+                self.scratch_idxs.iter().map(|&i| &self.preys[i]),
+                &mut eaten_prey_ids,
+                &mut newborn_preds,
+                &mut rng,
+            );
+
+            let dead = pred.core.energy < 0.0;
+            if !dead {
+                surviving_preds.push(pred);
             }
         }
 
-        // --- Prey update/draw ---
-        let mut j = 0;
-        while j < self.preys.len() {
-            let prey_rc = Rc::clone(&self.preys[j]);
-            let (x, y) = {
-                let prey = prey_rc.borrow();
-                (prey.x, prey.y)
-            };
+        // Newborn predators join next frame, but cap to max_predators
+        let free_slots = self.max_predators.saturating_sub(surviving_preds.len());
+        if free_slots > 0 {
+            surviving_preds.extend(newborn_preds.into_iter().take(free_slots));
+        }
+        self.predators = surviving_preds;
 
-            let nearby_preds = self.spatial_hash_preds.query(x, y);
+        // Remove eaten preys BEFORE prey phase
+        if !eaten_prey_ids.is_empty() {
+            self.preys
+                .retain(|prey| !eaten_prey_ids.contains(&prey.core.id));
+        }
 
-            // Get inputs for nearby predators
-            let inputs_opt = {
-                let prey = prey_rc.borrow();
-                prey.get_inputs(&nearby_preds, &mut self.predators, &mut rng)
-            };
+        // ----------------------------
+        // PREY PHASE
+        // ----------------------------
 
-            let Some(inputs) = inputs_opt else {
-                self.preys.remove(j);
-                continue;
-            };
+        // Build PREDATOR hash (AFTER predator movement/removal)
+        self.spatial_hash_preds.rebuild_from(&self.predators);
 
-            {
-                let mut prey = prey_rc.borrow_mut();
-                prey.move_step(&inputs);
+        let base = self.preys.len();
+        let allowed_newborns = self.max_preys.saturating_sub(base);
 
-                if self.preys.len() < settings::MAX_PREY_COUNT {
-                    if let Some(new_prey) = prey.reproduce(&mut rng) {
-                        self.preys.push(new_prey);
-                    }
+        let mut newborn_preys: Vec<Prey> = Vec::new();
+
+        // Iterate mutably: preys move + may reproduce
+        for prey in self.preys.iter_mut() {
+            let x = prey.core.pos.x;
+            let y = prey.core.pos.y;
+
+            self.spatial_hash_preds
+                .query_into(&mut self.scratch_idxs, x, y);
+            let inputs =
+                prey.sense_predators(self.scratch_idxs.iter().map(|&i| &self.predators[i]));
+
+            prey.move_step(&inputs);
+
+            if newborn_preys.len() < allowed_newborns {
+                if let Some(child) = prey.reproduce(&mut rng) {
+                    newborn_preys.push(child);
                 }
             }
-            
-            j += 1;
         }
 
-        return Frame::new(&self.predators, &self.preys, self.frame_count);
+        self.preys.extend(newborn_preys);
+
+        Frame::new(&self.predators, &self.preys, self.frame_count)
     }
 
     pub fn calculate_and_store_next_frame(&mut self) {
@@ -169,7 +197,7 @@ impl Game {
     }
 
     pub async fn playback(file_name: &str) {
-        for frame in DataManager::read_frames(file_name){
+        for frame in DataManager::read_frames(file_name) {
             clear_background(settings::BACKGROUND_COLOR);
             frame.draw(true);
             next_frame().await;
