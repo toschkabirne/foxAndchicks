@@ -113,6 +113,9 @@ impl Game {
         let mut surviving_preds: Vec<Predator> = Vec::with_capacity(self.predators.len());
 
         for mut pred in self.predators.drain(..) {
+            if pred.repro_cooldown > 0 {
+                pred.repro_cooldown -= 1;
+            }
             // Sense nearby preys at current predator position
             let px = pred.core.pos.x;
             let py = pred.core.pos.y;
@@ -179,10 +182,9 @@ impl Game {
 
             prey.move_step(&inputs);
 
-            if newborn_preys.len() < allowed_newborns {
-                if let Some(child) = prey.reproduce(&mut rng) {
-                    newborn_preys.push(child);
-                }
+            let has_slot = newborn_preys.len() < allowed_newborns;
+            if let Some(child) = prey.reproduce(&mut rng, has_slot) {
+                newborn_preys.push(child);
             }
         }
 
@@ -196,10 +198,10 @@ impl Game {
         self.data_manager.store_frame(&frame);
     }
 
-    pub async fn playback(file_name: &str) {
+    pub async fn playback(file_name: &str, draw_sight_lines: bool) {
         for frame in DataManager::read_frames(file_name) {
             clear_background(settings::BACKGROUND_COLOR);
-            frame.draw(true);
+            frame.draw(draw_sight_lines);
             next_frame().await;
         }
     }

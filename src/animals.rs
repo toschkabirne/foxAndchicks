@@ -124,6 +124,7 @@ fn move_with_speed_factor(
 pub struct Predator {
     pub core: AnimalCore,
     pub eaten_prey: i32,
+    pub repro_cooldown: i32, // frames bis fressen wieder erlaubt
 }
 
 impl HasPos for Predator {
@@ -146,6 +147,7 @@ impl Predator {
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PRED_ENERGY, brain),
             eaten_prey: 0,
+            repro_cooldown: 0,
         }
     }
 
@@ -263,11 +265,18 @@ impl Predator {
     }
 
     pub fn reproduce<R: Rng>(&mut self, rng: &mut R) -> Option<Predator> {
-        if self.eaten_prey <= 3 {
+        const REPRO_COOLDOWN_FRAMES: i32 = 5;
+
+        if self.repro_cooldown > 0 {
+            return None;
+        }
+
+        if self.eaten_prey < 3 {
             return None;
         }
 
         self.eaten_prey = 0;
+        self.repro_cooldown = REPRO_COOLDOWN_FRAMES;
 
         // Tiny offset near parent
         let ox = self.core.pos.x + rng.gen_range(-1..=1) as f32;
@@ -407,7 +416,7 @@ impl Prey {
         );
     }
 
-    pub fn reproduce<R: Rng>(&mut self, rng: &mut R) -> Option<Prey> {
+    pub fn reproduce<R: Rng>(&mut self, rng: &mut R, has_slot: bool) -> Option<Prey> {
         self.rest_time += 1;
 
         let threshold = (PREY_REPRODUCATION_RATE * FRAMES_PER_SECOND as f32) as i32;
@@ -416,9 +425,16 @@ impl Prey {
             return None;
         }
 
+        // Jetzt wäre sie "bereit". Wenn aber kein Slot frei ist:
+        if !has_slot {
+            // nicht zurücksetzen, sonst verliert sie den "ready"-Status
+            self.rest_time = threshold; // clamp
+            return None;
+        }
+
+        // Slot ist frei -> Geburt
         self.rest_time = 0;
 
-        // Random offset within +-50 px
         let ox =
             rng.gen_range((self.core.pos.x as i32 - 50)..=(self.core.pos.x as i32 + 50)) as f32;
         let oy =

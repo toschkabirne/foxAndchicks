@@ -22,16 +22,16 @@ pub const SCREEN_WIDTH: i32 = 1000;
 pub const SCREEN_HEIGHT: i32 = 1000;
 pub const FRAMES_PER_SECOND: i32 = 30;
 
-pub const PRED_INIT_NUMB: usize = 40;
-pub const PREY_INIT_NUMB: usize = 12;
+pub const PRED_INIT_NUMB: usize = 100;
+pub const PREY_INIT_NUMB: usize = 200;
 
-pub const MAX_PRED_COUNT: usize = 170;
-pub const MAX_PREY_COUNT: usize = 800;
+pub const MAX_PRED_COUNT: usize = 600;
+pub const MAX_PREY_COUNT: usize = 1200;
 
 // --------------------
 // data_manager.rs settings: #Rendering Engine
 // --------------------
-pub const SIGHT_RANGE_PREDATOR: f32 = 200.0;
+pub const SIGHT_RANGE_PREDATOR: f32 = 150.0;
 pub const SIGHT_RANGE_PREY: f32 = 100.0;
 
 pub const NUMBER_SIGHTS_PREY: usize = 24;
@@ -56,7 +56,7 @@ pub const PREDATOR_SPEED: f32 =
 // Energy
 pub const PRED_ENERGY: f32 = 100.0;
 pub const PREDATOR_ENERGY_GAIN: f32 = 40.0;
-pub const PREDATOR_LIFESPAN: f32 = 15.0;
+pub const PREDATOR_LIFESPAN: f32 = 40.0;
 
 // PRED_DEFAULT_DECAY = PRED_ENERGY / (PREDATOR_LIFESPAN*FRAMES_PER_SECOND)
 pub const PRED_DEFAULT_DECAY: f32 = PRED_ENERGY / (PREDATOR_LIFESPAN * (FRAMES_PER_SECOND as f32));
@@ -87,7 +87,7 @@ pub const PREY_REST_ENERGY_GAIN: f32 = PREY_ENERGY / (4.0 * (FRAMES_PER_SECOND a
 // --------------------
 // Mutations parameter
 // --------------------
-static PREY_INIT_MUT: RwLock<usize> = RwLock::new(12);
+static PREY_INIT_MUT: RwLock<usize> = RwLock::new(20);
 pub fn prey_init_mut() -> usize {
     *PREY_INIT_MUT.read().unwrap()
 }
