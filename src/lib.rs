@@ -4,3 +4,4 @@ pub mod data_manager;
 pub mod game;
 pub mod settings;
 pub mod spatial_hash;
+pub mod visualization;

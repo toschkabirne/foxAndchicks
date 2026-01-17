@@ -2,20 +2,12 @@
 
 use predator_vs_prey::game::Game;
 use predator_vs_prey::settings::{self, DEFAULT_DATA_FILE};
+use predator_vs_prey::visualization::{draw_frame, draw_game_stats, window_conf};
 
 use macroquad::prelude::*;
 use std::time::Instant;
 
-// use pred_prey_sim::{animals::*, settings::*, spatial_hash::*, brain_neural_network::*};
-
-fn window_conf() -> Conf {
-    Conf {
-        window_title: "Predator and Prey Simulation".to_string(),
-        window_width: settings::SCREEN_WIDTH,
-        window_height: settings::SCREEN_HEIGHT,
-        ..Default::default()
-    }
-}
+// use pred_prey_sim::{animals::*, settings::*, spatial_hash::*, brain_neural_network::*}
 
 #[macroquad::main(window_conf)]
 async fn main() {
@@ -88,7 +80,10 @@ async fn playback_live(filename: &str, draw_sight_lines: bool) {
     loop {
         clear_background(settings::BACKGROUND_COLOR);
         let frame = game.next_frame();
-        frame.draw(draw_sight_lines);
+        draw_frame(&frame, draw_sight_lines);
+
+        let (pred_count, prey_count) = frame.counts();
+        draw_game_stats(pred_count, prey_count, game.frame_count);
 
         // Optional: break after certain frames or on key press
         if is_key_pressed(KeyCode::Escape) {

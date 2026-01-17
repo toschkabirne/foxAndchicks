@@ -2,10 +2,12 @@ use crate::animals::{Predator, Prey};
 use crate::data_manager::{DataManager, Frame};
 use crate::settings::{self};
 use crate::spatial_hash::SpatialHash;
+use crate::visualization::{draw_frame, draw_game_stats};
 use ::rand::rngs::ThreadRng;
 use ::rand::Rng;
 use macroquad::prelude::*;
 use std::collections::HashSet;
+
 // main structs and logic for the game itself -> main should be light, just setup and loop
 pub struct Game {
     pub frame_count: usize,
@@ -201,7 +203,11 @@ impl Game {
     pub async fn playback(file_name: &str, draw_sight_lines: bool) {
         for frame in DataManager::read_frames(file_name) {
             clear_background(settings::BACKGROUND_COLOR);
-            frame.draw(draw_sight_lines);
+            draw_frame(&frame, draw_sight_lines);
+
+            let (pred_count, prey_count) = frame.counts();
+            draw_game_stats(pred_count, prey_count, frame.tick);
+
             next_frame().await;
         }
     }
