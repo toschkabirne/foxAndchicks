@@ -4,7 +4,7 @@ use crate::settings::*;
 use macroquad::prelude::*;
 use std::io::{self, Write};
 
-use predator_vs_prey::animals::{distance, Predator, Prey};
+use predator_vs_prey::animals::{wrapped_distance_abs, Predator, Prey};
 use predator_vs_prey::brain_neural_network::NeuralNetwork;
 use predator_vs_prey::*;
 
@@ -283,7 +283,7 @@ async fn main() {
 
         // "Eaten" check: simple collision (Predator circle intersects Prey circle)
         let eat_r = PREDATOR_RADIUS + PREY_RADIUS;
-        if distance(predator.core.pos, prey.core.pos) < eat_r {
+        if wrapped_distance_abs(predator.core.pos, prey.core.pos, SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32) < eat_r {
             println!("Prey eaten! Spawning new prey.");
             prey = Prey::new(
                 (SCREEN_WIDTH / 2) as f32,

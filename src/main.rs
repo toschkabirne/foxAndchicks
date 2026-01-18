@@ -5,7 +5,6 @@ use predator_vs_prey::settings::{self, DEFAULT_DATA_FILE};
 use predator_vs_prey::visualization::{draw_frame, draw_game_stats, window_conf};
 
 use macroquad::prelude::*;
-use std::time::Instant;
 
 // use pred_prey_sim::{animals::*, settings::*, spatial_hash::*, brain_neural_network::*}
 
