@@ -16,6 +16,7 @@ async fn main() {
     let mut run_live = false;
     let mut draw_sight_lines = true;
     let mut filename: String = DEFAULT_DATA_FILE.to_string();
+    let mut total_frames: i32 = settings::DEFAULT_TOTAL_FRAMES;
 
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -25,15 +26,28 @@ async fn main() {
             "--file" | "-f" => {
                 filename = it.next().unwrap_or_else(|| DEFAULT_DATA_FILE.to_string());
             }
+            "--frames" | "-n" => {
+                total_frames = it.next()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(settings::DEFAULT_TOTAL_FRAMES);
+            }
             "--help" | "-h" => {
                 println!("Usage:");
-                println!("  cargo run -- [--run-live] [--no-sight] [--file <path>]");
+                println!("  cargo run -- [--run-live] [--no-sight] [--file <path>] [--frames <num>]");
+                println!();
+                println!("Options:");
+                println!("  --run-live           Run simulation with live rendering");
+                println!("  --no-sight           Hide sight lines during playback");
+                println!("  --file, -f <path>    Specify the output file path");
+                println!("  --frames, -n <num>   Number of frames to record");
+                println!();
+                println!("To playback an existing recording, use:");
+                println!("  cargo run --bin playback -- --file <path>");
                 println!();
                 println!("Examples:");
                 println!("  cargo run -- --run-live");
                 println!("  cargo run -- --run-live --no-sight");
-                println!("  cargo run -- --file simulation_data.bin");
-                println!("  cargo run -- --file simulation_data.bin --no-sight");
+                println!("  cargo run -- --frames 5000");
                 return;
             }
             other => {
@@ -47,17 +61,14 @@ async fn main() {
         println!("Running live simulation...");
         playback_live(&filename, draw_sight_lines).await;
     } else {
-        record_then_playback(&filename, draw_sight_lines).await;
+        record_then_playback(&filename, draw_sight_lines, total_frames).await;
     }
 }
 
-async fn record_then_playback(filename: &str, draw_sight_lines: bool) {
+async fn record_then_playback(filename: &str, draw_sight_lines: bool, total_frames: i32) {
     let mut game = Game::new_default(filename);
 
-    let start_time = Instant::now();
-
     // Record headless (no rendering)
-    let total_frames = settings::FRAMES_PER_SECOND * 10;
     for i in 0..total_frames {
         game.calculate_and_store_next_frame();
         if i % 500 == 0 {
@@ -65,12 +76,14 @@ async fn record_then_playback(filename: &str, draw_sight_lines: bool) {
         }
     }
 
-    let elapsed = start_time.elapsed();
+    // Get the actual filename before dropping (includes timestamp)
+    let processed_filename = game.get_data_filename().to_string();
+
     // IMPORTANT: close/flush the writer before reading the file for playback
     drop(game);
 
     // Playback with visualization
-    Game::playback(filename, draw_sight_lines).await;
+    Game::playback(&processed_filename, draw_sight_lines).await;
 }
 
 async fn playback_live(filename: &str, draw_sight_lines: bool) {
