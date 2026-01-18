@@ -1,11 +1,11 @@
 use crate::animals::{Predator, Prey};
-use crate::data_manager::{DataManager, Frame};
+use crate::data_manager::{DataManager, Frame, IndexedFrameReader};
 use crate::settings::{self};
 use crate::spatial_hash::SpatialHash;
-use crate::visualization::{draw_frame, draw_game_stats};
-use ::rand::rngs::ThreadRng;
+use crate::visualization::{draw_frame, draw_game_stats, draw_playback_controls, PlaybackState};
 use ::rand::Rng;
 use macroquad::prelude::*;
+use rayon::prelude::*;
 use std::collections::HashSet;
 
 // main structs and logic for the game itself -> main should be light, just setup and loop
@@ -18,7 +18,6 @@ pub struct Game {
     max_predators: usize,
     max_preys: usize,
     data_manager: DataManager,
-    scratch_idxs: Vec<usize>,
 }
 
 impl Game {
@@ -89,7 +88,6 @@ impl Game {
             max_predators: max_preds,
             max_preys: max_preys,
             data_manager,
-            scratch_idxs: Vec::with_capacity(128),
         }
     }
 
@@ -106,7 +104,6 @@ impl Game {
 
     pub fn next_frame(&mut self) -> Frame {
         self.frame_count += 1;
-        let mut rng: ThreadRng = ::rand::thread_rng();
 
         // ----------------------------
         // PREDATOR PHASE
@@ -115,51 +112,46 @@ impl Game {
         // Build PREY hash (preys are still at "start of frame" positions)
         self.spatial_hash_preys.rebuild_from(&self.preys);
 
-        let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
-        let mut newborn_preds: Vec<Predator> = Vec::new();
-
-        // Drain predators to avoid borrow conflicts (same pattern as before, but now it's cheap)
-        let mut surviving_preds: Vec<Predator> = Vec::with_capacity(self.predators.len());
-
-        for mut pred in self.predators.drain(..) {
+        // PARALLEL: Sense and move predators
+        // Each predator independently senses nearby preys and computes its movement
+        self.predators.par_iter_mut().for_each(|pred| {
             if pred.repro_cooldown > 0 {
                 pred.repro_cooldown -= 1;
             }
-            // Sense nearby preys at current predator position
-            let px = pred.core.pos.x;
-            let py = pred.core.pos.y;
 
-            self.spatial_hash_preys
-                .query_into(&mut self.scratch_idxs, px, py);
-            let inputs = pred.get_inputs(self.scratch_idxs.iter().map(|&i| &self.preys[i]));
+            // Sense nearby preys at current predator position
+            let nearby_prey_idxs = self.spatial_hash_preys.query(pred.core.pos.x, pred.core.pos.y);
+
+            // SAFETY: We only read from self.preys here, no mutation
+            let inputs = pred.get_inputs(nearby_prey_idxs.iter().filter_map(|&i| self.preys.get(i)));
 
             pred.move_step(&inputs);
+        });
 
+        // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
+        let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
+        let mut newborn_preds: Vec<Predator> = Vec::new();
+        let mut rng = ::rand::thread_rng();
+
+        for pred in self.predators.iter_mut() {
             // Hunt near new position (preys haven't moved yet)
-            self.spatial_hash_preys.query_into(
-                &mut self.scratch_idxs,
-                pred.core.pos.x,
-                pred.core.pos.y,
-            );
+            let nearby_prey_idxs = self.spatial_hash_preys.query(pred.core.pos.x, pred.core.pos.y);
+
             pred.hunt_nearby(
-                self.scratch_idxs.iter().map(|&i| &self.preys[i]),
+                nearby_prey_idxs.iter().filter_map(|&i| self.preys.get(i)),
                 &mut eaten_prey_ids,
                 &mut newborn_preds,
                 &mut rng,
             );
-
-            let dead = pred.core.energy < 0.0;
-            if !dead {
-                surviving_preds.push(pred);
-            }
         }
 
-        // Newborn predators join next frame, but cap to max_predators
-        let free_slots = self.max_predators.saturating_sub(surviving_preds.len());
+        // Remove dead predators and add newborns
+        self.predators.retain(|pred| pred.core.energy >= 0.0);
+
+        let free_slots = self.max_predators.saturating_sub(self.predators.len());
         if free_slots > 0 {
-            surviving_preds.extend(newborn_preds.into_iter().take(free_slots));
+            self.predators.extend(newborn_preds.into_iter().take(free_slots));
         }
-        self.predators = surviving_preds;
 
         // Remove eaten preys BEFORE prey phase
         if !eaten_prey_ids.is_empty() {
@@ -174,23 +166,21 @@ impl Game {
         // Build PREDATOR hash (AFTER predator movement/removal)
         self.spatial_hash_preds.rebuild_from(&self.predators);
 
-        let base = self.preys.len();
-        let allowed_newborns = self.max_preys.saturating_sub(base);
+        // PARALLEL: Sense and move preys
+        self.preys.par_iter_mut().for_each(|prey| {
+            let nearby_pred_idxs = self.spatial_hash_preds.query(prey.core.pos.x, prey.core.pos.y);
 
-        let mut newborn_preys: Vec<Prey> = Vec::new();
-
-        // Iterate mutably: preys move + may reproduce
-        for prey in self.preys.iter_mut() {
-            let x = prey.core.pos.x;
-            let y = prey.core.pos.y;
-
-            self.spatial_hash_preds
-                .query_into(&mut self.scratch_idxs, x, y);
-            let inputs =
-                prey.sense_predators(self.scratch_idxs.iter().map(|&i| &self.predators[i]));
+            // SAFETY: We only read from self.predators here, no mutation
+            let inputs = prey.sense_predators(nearby_pred_idxs.iter().filter_map(|&i| self.predators.get(i)));
 
             prey.move_step(&inputs);
+        });
 
+        // SEQUENTIAL: Reproduction phase (requires RNG and counting newborns)
+        let allowed_newborns = self.max_preys.saturating_sub(self.preys.len());
+        let mut newborn_preys: Vec<Prey> = Vec::new();
+
+        for prey in self.preys.iter_mut() {
             let has_slot = newborn_preys.len() < allowed_newborns;
             if let Some(child) = prey.reproduce(&mut rng, has_slot) {
                 newborn_preys.push(child);
@@ -208,12 +198,81 @@ impl Game {
     }
 
     pub async fn playback(file_name: &str, draw_sight_lines: bool) {
-        for frame in DataManager::read_frames(file_name) {
+        // Build index for random access without loading all frames into memory
+        println!("Indexing frames...");
+        let mut frame_reader = match IndexedFrameReader::new(file_name) {
+            Ok(reader) => reader,
+            Err(e) => {
+                eprintln!("Failed to open recording: {}", e);
+                return;
+            }
+        };
+
+        let total_frames = frame_reader.len();
+
+        if total_frames == 0 {
+            eprintln!("No frames found in recording.");
+            return;
+        }
+
+        println!("Indexed {} frames. Starting playback...", total_frames);
+        println!("Controls:");
+        println!("  Space: Play/Pause");
+        println!("  Left/Right Arrow: Step backward/forward");
+        println!("  Up/Down Arrow: Increase/decrease speed");
+        println!("  Home/End: Jump to start/end");
+        println!("  Click and drag slider to seek");
+
+        let mut playback_state = PlaybackState::default();
+        let mut accumulated_time = 0.0;
+        let frame_duration = 1.0 / 60.0; // Base frame rate
+
+        // Cache the current frame to avoid re-reading on every render
+        let mut cached_frame: Option<Frame> = None;
+        let mut cached_frame_index: Option<usize> = None;
+
+        loop {
+            // Handle exit
+            if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
+                break;
+            }
+
+            // Update frame based on playback state
+            if playback_state.is_playing && !playback_state.is_dragging {
+                accumulated_time += get_frame_time() * playback_state.playback_speed;
+
+                while accumulated_time >= frame_duration {
+                    accumulated_time -= frame_duration;
+                    if playback_state.current_frame < total_frames - 1 {
+                        playback_state.current_frame += 1;
+                    } else {
+                        // Loop back to start or pause at end
+                        playback_state.current_frame = 0;
+                    }
+                }
+            }
+
+            // Only read frame from disk if it changed
+            if cached_frame_index != Some(playback_state.current_frame) {
+                cached_frame = frame_reader.get_frame(playback_state.current_frame);
+                cached_frame_index = Some(playback_state.current_frame);
+            }
+
+            let frame = match &cached_frame {
+                Some(f) => f,
+                None => {
+                    eprintln!("Failed to read frame {}", playback_state.current_frame);
+                    break;
+                }
+            };
+
             clear_background(settings::BACKGROUND_COLOR);
-            draw_frame(&frame, draw_sight_lines);
+            draw_frame(frame, draw_sight_lines);
 
             let (pred_count, prey_count) = frame.counts();
             draw_game_stats(pred_count, prey_count, frame.tick);
+
+            draw_playback_controls(&mut playback_state, total_frames);
 
             next_frame().await;
         }

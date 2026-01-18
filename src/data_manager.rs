@@ -4,7 +4,7 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::time::SystemTime;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::path::Path;
 
 /// Snapshot of all simulation settings at the time of recording.
@@ -203,6 +203,79 @@ impl Iterator for FrameReader {
 
     fn next(&mut self) -> Option<Self::Item> {
         bincode::deserialize_from(&mut self.reader).ok()
+    }
+}
+
+/// Random-access frame reader that builds an index of frame offsets.
+/// This allows seeking to any frame without loading all frames into memory.
+/// Only the index (8 bytes per frame) is kept in memory.
+pub struct IndexedFrameReader {
+    file: File,
+    frame_offsets: Vec<u64>,
+    current_index: usize,
+}
+
+impl IndexedFrameReader {
+    /// Creates a new IndexedFrameReader by scanning the file to build an index.
+    /// This performs one full read of the file to find frame boundaries.
+    pub fn new(filename: &str) -> std::io::Result<Self> {
+        // First pass: build the index
+        let mut file = File::open(filename)?;
+        let mut frame_offsets = Vec::new();
+        let mut reader = BufReader::new(&file);
+
+        loop {
+            let offset = reader.stream_position()?;
+            
+            // Try to deserialize a frame to find its size
+            let result: Result<Frame, _> = bincode::deserialize_from(&mut reader);
+            match result {
+                Ok(_) => {
+                    frame_offsets.push(offset);
+                }
+                Err(_) => break, // End of file or parse error
+            }
+        }
+
+        // Reopen file for random access (without BufReader for seeking)
+        drop(reader);
+        file.seek(SeekFrom::Start(0))?;
+
+        Ok(Self {
+            file,
+            frame_offsets,
+            current_index: 0,
+        })
+    }
+
+    /// Returns the total number of frames in the file.
+    pub fn len(&self) -> usize {
+        self.frame_offsets.len()
+    }
+
+    /// Returns true if there are no frames.
+    pub fn is_empty(&self) -> bool {
+        self.frame_offsets.is_empty()
+    }
+
+    /// Seeks to and reads a specific frame by index.
+    /// Returns None if the index is out of bounds.
+    pub fn get_frame(&mut self, index: usize) -> Option<Frame> {
+        if index >= self.frame_offsets.len() {
+            return None;
+        }
+
+        let offset = self.frame_offsets[index];
+        self.file.seek(SeekFrom::Start(offset)).ok()?;
+        self.current_index = index;
+
+        let mut reader = BufReader::new(&self.file);
+        bincode::deserialize_from(&mut reader).ok()
+    }
+
+    /// Returns the current frame index.
+    pub fn current_index(&self) -> usize {
+        self.current_index
     }
 }
 
