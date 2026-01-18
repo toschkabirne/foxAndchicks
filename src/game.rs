@@ -72,8 +72,11 @@ impl Game {
         let cell_prey =
             ((settings::SCREEN_WIDTH as f32) / settings::SIGHT_RANGE_PREY).floor() as i32;
 
-        let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_pred);
-        let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_prey);
+        let world_w = settings::SCREEN_WIDTH as f32;
+        let world_h = settings::SCREEN_HEIGHT as f32;
+
+        let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_pred, world_w, world_h);
+        let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_prey, world_w, world_h);
 
         let data_manager: DataManager = DataManager::new(file_name);
 
