@@ -28,6 +28,10 @@ impl Game {
     pub fn prey_count(&self) -> usize {
         self.preys.len()
     }
+    /// Returns the actual filename (with timestamp) used for storing data
+    pub fn get_data_filename(&self) -> &str {
+        &self.data_manager.filename
+    }
 }
 
 impl Game {

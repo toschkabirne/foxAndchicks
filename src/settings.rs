@@ -21,6 +21,7 @@ pub const BACKGROUND_COLOR: Color = BLACK;
 pub const SCREEN_WIDTH: i32 = 1000;
 pub const SCREEN_HEIGHT: i32 = 1000;
 pub const FRAMES_PER_SECOND: i32 = 30;
+pub const DEFAULT_TOTAL_FRAMES: i32 = 2000;
 
 pub const PRED_INIT_NUMB: usize = 100;
 pub const PREY_INIT_NUMB: usize = 200;
