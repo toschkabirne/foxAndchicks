@@ -1,8 +1,102 @@
 use crate::animals::{Predator, Prey};
+use crate::settings;
 use bincode;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::fs::{self, File};
+use std::time::SystemTime;
+use std::io::{BufReader, BufWriter, Write};
+use std::path::Path;
+
+/// Snapshot of all simulation settings at the time of recording.
+/// This captures both const and runtime-mutable settings.
+/// All fields are `Option<T>` for forward compatibility - new fields added
+/// in the future will be `None` when reading old files, clearly indicating
+/// the setting was not available at recording time.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SimulationSettings {
+    // Screen / game settings
+    pub screen_width: Option<i32>,
+    pub screen_height: Option<i32>,
+    pub frames_per_second: Option<i32>,
+    pub pred_init_numb: Option<usize>,
+    pub prey_init_numb: Option<usize>,
+    pub max_pred_count: Option<usize>,
+    pub max_prey_count: Option<usize>,
+
+    // Sight settings
+    pub sight_range_predator: Option<f32>,
+    pub sight_range_prey: Option<f32>,
+    pub number_sights_prey: Option<usize>,
+    pub number_sights_predator: Option<usize>,
+
+    // Predator settings
+    pub predator_radius: Option<f32>,
+    pub predator_speed: Option<f32>,
+    pub pred_energy: Option<f32>,
+    pub predator_energy_gain: Option<f32>,
+    pub predator_lifespan: Option<f32>,
+    pub pred_default_decay: Option<f32>,
+    pub pred_moving_decay: Option<f32>,
+
+    // Prey settings
+    pub prey_radius: Option<f32>,
+    pub prey_speed: Option<f32>,
+    pub prey_energy: Option<f32>,
+    pub prey_reproducation_rate: Option<f32>,
+    pub prey_moving_decay: Option<f32>,
+    pub prey_rest_energy_gain: Option<f32>,
+
+    // Mutation parameters (runtime-mutable)
+    pub prey_init_mut: Option<usize>,
+    pub pred_init_mut: Option<usize>,
+    pub add_neuron: Option<f32>,
+    pub add_weight: Option<f32>,
+    pub change_weight: Option<f32>,
+    pub bias: Option<f32>,
+}
+
+impl SimulationSettings {
+    /// Captures current settings from the settings module
+    pub fn capture() -> Self {
+        SimulationSettings {
+            screen_width: Some(settings::SCREEN_WIDTH),
+            screen_height: Some(settings::SCREEN_HEIGHT),
+            frames_per_second: Some(settings::FRAMES_PER_SECOND),
+            pred_init_numb: Some(settings::PRED_INIT_NUMB),
+            prey_init_numb: Some(settings::PREY_INIT_NUMB),
+            max_pred_count: Some(settings::MAX_PRED_COUNT),
+            max_prey_count: Some(settings::MAX_PREY_COUNT),
+
+            sight_range_predator: Some(settings::SIGHT_RANGE_PREDATOR),
+            sight_range_prey: Some(settings::SIGHT_RANGE_PREY),
+            number_sights_prey: Some(settings::NUMBER_SIGHTS_PREY),
+            number_sights_predator: Some(settings::NUMBER_SIGHTS_PREDATOR),
+
+            predator_radius: Some(settings::PREDATOR_RADIUS),
+            predator_speed: Some(settings::PREDATOR_SPEED),
+            pred_energy: Some(settings::PRED_ENERGY),
+            predator_energy_gain: Some(settings::PREDATOR_ENERGY_GAIN),
+            predator_lifespan: Some(settings::PREDATOR_LIFESPAN),
+            pred_default_decay: Some(settings::PRED_DEFAULT_DECAY),
+            pred_moving_decay: Some(settings::PRED_MOVING_DECAY),
+
+            prey_radius: Some(settings::PREY_RADIUS),
+            prey_speed: Some(settings::PREY_SPEED),
+            prey_energy: Some(settings::PREY_ENERGY),
+            prey_reproducation_rate: Some(settings::PREY_REPRODUCATION_RATE),
+            prey_moving_decay: Some(settings::PREY_MOVING_DECAY),
+            prey_rest_energy_gain: Some(settings::PREY_REST_ENERGY_GAIN),
+
+            // Runtime-mutable settings
+            prey_init_mut: Some(settings::prey_init_mut()),
+            pred_init_mut: Some(settings::pred_init_mut()),
+            add_neuron: Some(settings::add_neuron()),
+            add_weight: Some(settings::add_weight()),
+            change_weight: Some(settings::change_weight()),
+            bias: Some(settings::bias()),
+        }
+    }
+}
 
 // Needed functionality
 // we want to be able to track animals across frames
@@ -16,17 +110,71 @@ pub enum AnimalType {
 pub struct DataManager {
     // Fields and methods for managing data
     writer: BufWriter<File>,
+    /// The actual filename used (including timestamp)
+    pub filename: String,
 }
 
 impl DataManager {
-    pub fn new(filename: &str) -> Self {
+    /// Creates a new DataManager for storing simulation data.
+    /// Automatically appends a timestamp (YYYY-MM-DD_HH-MM-SS) to the filename.
+    /// Settings are stored in a separate JSON file for forward/backward compatibility.
+    ///
+    /// Example: `new("simulation")` creates `simulation_2026-01-17_14-30-45.bin`
+    pub fn new(base_filename: &str) -> Self {
+        let filename = Self::generate_timestamped_filename(base_filename);
         let file = File::create(&filename).expect("Unable to create file");
         let writer = BufWriter::new(file);
-        DataManager { writer }
+
+        // Store settings in a separate JSON file for compatibility
+        let settings = SimulationSettings::capture();
+        let settings_filename = Self::settings_filename(&filename);
+        let settings_json = serde_json::to_string_pretty(&settings)
+            .expect("Failed to serialize settings to JSON");
+        let mut settings_file = File::create(&settings_filename)
+            .expect("Unable to create settings file");
+        settings_file
+            .write_all(settings_json.as_bytes())
+            .expect("Failed to write settings file");
+
+        DataManager { writer, filename }
+    }
+
+    /// Generates a filename with timestamp in the simulations folder.
+    /// Format: `simulations/<base>_<unix_timestamp>.bin`
+    fn generate_timestamped_filename(base: &str) -> String {
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+        let base = Path::new(base)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or(base)
+            .trim_end_matches(".bin");
+        
+        // Ensure simulations directory exists
+        let simulations_dir = "simulations";
+        fs::create_dir_all(simulations_dir).expect("Failed to create simulations directory");
+        
+        format!("{}/{}_{}.bin", simulations_dir, base, timestamp)
+    }
+
+    /// Returns the settings filename for a given data filename.
+    pub fn settings_filename(data_filename: &str) -> String {
+        format!("{}.settings.json", data_filename.trim_end_matches(".bin"))
     }
 
     pub fn store_frame(&mut self, frame: &Frame) {
         bincode::serialize_into(&mut self.writer, frame).expect("Failed to write frame");
+    }
+
+    /// Reads the settings from the companion JSON file.
+    /// Uses serde defaults for any missing fields (forward compatibility).
+    pub fn read_settings(data_filename: &str) -> SimulationSettings {
+        let settings_filename = Self::settings_filename(data_filename);
+        let file = File::open(&settings_filename).expect("Unable to open settings file");
+        let reader = BufReader::new(file);
+        serde_json::from_reader(reader).expect("Failed to parse settings JSON")
     }
 
     /// Returns an iterator that streams frames from a file using buffered reading.
@@ -35,6 +183,13 @@ impl DataManager {
         let file = File::open(filename).expect("Unable to open file");
         let reader = BufReader::new(file);
         FrameReader { reader }
+    }
+
+    /// Returns both the settings and a frame iterator from a data file.
+    pub fn read_file(filename: &str) -> (SimulationSettings, FrameReader) {
+        let settings = Self::read_settings(filename);
+        let frame_reader = Self::read_frames(filename);
+        (settings, frame_reader)
     }
 }
 
@@ -152,13 +307,48 @@ mod tests {
 
     #[test]
     fn test_store_frame() {
-        let filename = "/tmp/test_store_frame.bin";
-        let mut dm = DataManager::new(filename);
+        let mut dm = DataManager::new("/tmp/test_store_frame");
+        let actual_filename = dm.filename.clone();
         let predators: Vec<Predator> = Vec::new();
         let preys: Vec<Prey> = Vec::new();
         let frame = Frame::new(&predators, &preys, 0);
 
         dm.store_frame(&frame);
-        assert!(std::path::Path::new(filename).exists());
+        drop(dm); // Ensure file is flushed
+
+        // Verify the timestamped file was created
+        assert!(std::path::Path::new(&actual_filename).exists());
+        assert!(actual_filename.contains("test_store_frame_"));
+        assert!(actual_filename.ends_with(".bin"));
+
+        // Verify we can read the settings and frames back
+        let (settings, mut frame_reader) = DataManager::read_file(&actual_filename);
+        assert_eq!(settings.screen_width, Some(crate::settings::SCREEN_WIDTH));
+        assert_eq!(settings.screen_height, Some(crate::settings::SCREEN_HEIGHT));
+
+        let read_frame = frame_reader.next().expect("Should have one frame");
+        assert_eq!(read_frame.tick, 0);
+        assert_eq!(read_frame.animals.len(), 0);
+
+        // Verify settings JSON file was created
+        let settings_path = DataManager::settings_filename(&actual_filename);
+        assert!(std::path::Path::new(&settings_path).exists());
+    }
+
+    #[test]
+    fn test_settings_storage() {
+        let dm = DataManager::new("/tmp/test_settings_storage");
+        let actual_filename = dm.filename.clone();
+        drop(dm); // Ensure file is flushed
+
+        // Verify settings JSON file was created with timestamp
+        let settings_path = DataManager::settings_filename(&actual_filename);
+        assert!(std::path::Path::new(&settings_path).exists());
+
+        let settings = DataManager::read_settings(&actual_filename);
+        assert_eq!(settings.screen_width, Some(crate::settings::SCREEN_WIDTH));
+        assert_eq!(settings.frames_per_second, Some(crate::settings::FRAMES_PER_SECOND));
+        assert_eq!(settings.pred_init_numb, Some(crate::settings::PRED_INIT_NUMB));
+        assert_eq!(settings.prey_init_numb, Some(crate::settings::PREY_INIT_NUMB));
     }
 }

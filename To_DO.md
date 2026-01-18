@@ -53,4 +53,14 @@ The simulation itself works.
 
 # Animal
 
-- Create animal class that predator and prey inherit from
+- Create animal class that predator and prey inherit from (DONE)
+- Is sight possible accross borders? (It seems like preys tend to cluster at the borders)
+
+# Neural 
+
+- Use fully connected NN
+
+# Game
+
+- Add a slider to playback visualisation
+- Add graphs
