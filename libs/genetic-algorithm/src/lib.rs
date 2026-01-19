@@ -40,7 +40,7 @@ impl Animal {
     }
 
     pub fn update_sight(&mut self, new_sight: Vec<f32>) {
-        self.sight = new_sight;
+        self.sight = new_sight.clone();
         let out = self.brain.propagate(new_sight);
         self.speed = out[0];
         self.angle = out[1];
@@ -72,8 +72,14 @@ impl Clone for Animal {
 }
 
 #[derive(Debug)]
-pub struct Prey(Animal);
-pub struct Predator(Animal);
+pub struct Prey {
+    animal: Animal,
+}
+
+#[derive(Debug)]
+pub struct Predator {
+    animal: Animal,
+}
 
 
 
@@ -109,7 +115,7 @@ impl DerefMut for Predator {
 impl Prey {
     pub fn new(id: usize, pos: (f32, f32), sight: Vec<f32>, brain_topology: &[LayerTopology]) -> Self {
         let animal = Animal::new(id, pos, sight, brain_topology);
-        Self(animal)
+        Self { animal }
     }
 }
 
@@ -117,6 +123,6 @@ impl Prey {
 impl Predator {
     pub fn new(id: usize, pos: (f32, f32), sight: Vec<f32>, brain_topology: &[LayerTopology]) -> Self {
         let animal = Animal::new(id, pos, sight, brain_topology);
-        Self(animal)
+        Self { animal }
     }
 }

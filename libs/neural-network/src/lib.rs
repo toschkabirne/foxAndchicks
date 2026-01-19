@@ -49,6 +49,10 @@ impl Layer {
         }
         outputs
     }
+
+    fn add_neuron(&mut self, neuron: Neuron) {
+        self.neurons.push(neuron);
+    }
 }
 
 
@@ -109,11 +113,11 @@ impl NeuralNetwork {
 
         for layer in &mut self.layers {
             for neuron in &mut layer.neurons {
-                if rng.random_float() < mutation_rate {
+                if rng.random::<f32>() < mutation_rate {
                     neuron.bias += rng.random_range(-mutation_amount..=mutation_amount);
                 }
                 for weight in &mut neuron.weights {
-                    if rng.random_float() < mutation_rate {
+                    if rng.random::<f32>() < mutation_rate {
                         *weight += rng.random_range(-mutation_amount..=mutation_amount);
                     }
                 }
@@ -130,23 +134,47 @@ impl NeuralNetwork {
         }
     }
 
-    pub fn clone(&self) -> Self {
-        let mut new_layers = Vec::new();
+    pub fn add_layer(&mut self, position: usize, topology: &LayerTopology) {
+        assert!(position > 0 && position < self.layers.len(), "Position out of bounds");
 
-        for layer in &self.layers {
-            let mut new_neurons = Vec::new();
-            for neuron in &layer.neurons {
-                let new_neuron = Neuron {
-                    bias: neuron.bias,
-                    weights: neuron.weights.clone(),
-                };
-                new_neurons.push(new_neuron);
-            }
-            let new_layer = Layer { neurons: new_neurons };
-            new_layers.push(new_layer);
+        let input_size = self.layers[position - 1].neurons.len();
+        let output_size = topology.neurons;
+
+        let new_layer = Layer::new(input_size, output_size);
+
+        self.layers.insert(position, new_layer);
+
+        let next_layer_input_size = output_size;
+        let next_layer_output_size = self.layers[position + 1].neurons.len();
+
+        let mut adjusted_next_layer = Layer::new(next_layer_input_size, next_layer_output_size);
+
+        for _neuron in &self.layers[position + 1].neurons {
+            adjusted_next_layer.add_neuron(Neuron::new(next_layer_input_size));
         }
 
-        Self { layers: new_layers }
+        self.layers[position + 1] = adjusted_next_layer;
     }
 
+}
+
+impl Clone for NeuralNetwork {
+    fn clone(&self) -> Self {
+        let mut cloned_layers = Vec::new();
+        for layer in &self.layers {
+            let mut cloned_neurons = Vec::new();
+            for neuron in &layer.neurons {
+                cloned_neurons.push(Neuron {
+                    bias: neuron.bias,
+                    weights: neuron.weights.clone(),
+                });
+            }
+            cloned_layers.push(Layer {
+                neurons: cloned_neurons,
+            });
+        }
+        Self {
+            layers: cloned_layers,
+        }
+    }
 }
