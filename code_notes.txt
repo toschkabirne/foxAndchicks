@@ -1,0 +1,5 @@
+Game: 
+fn new: 
+# we use one central seed, for example we could use: let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+# and we use this rng for all random numbers in the game. Thus we get a reprducible game.
+let mut rng = ::rand::thread_rng();

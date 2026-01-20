@@ -88,7 +88,7 @@ pub const PREY_REST_ENERGY_GAIN: f32 = PREY_ENERGY / (4.0 * (FRAMES_PER_SECOND a
 // --------------------
 // Mutations parameter
 // --------------------
-static PREY_INIT_MUT: RwLock<usize> = RwLock::new(20);
+static PREY_INIT_MUT: RwLock<usize> = RwLock::new(40);
 pub fn prey_init_mut() -> usize {
     *PREY_INIT_MUT.read().unwrap()
 }
@@ -109,7 +109,7 @@ pub const DEFAULT_DATA_FILE: &str = "simulation_data.bin";
 // --------------------
 // Mutation / Bias params
 // --------------------
-static ADD_NEURON: RwLock<f32> = RwLock::new(0.1);
+static ADD_NEURON: RwLock<f32> = RwLock::new(0.07);
 pub fn add_neuron() -> f32 {
     *ADD_NEURON.read().unwrap()
 }
@@ -117,7 +117,7 @@ pub fn set_add_neuron(v: f32) {
     *ADD_NEURON.write().unwrap() = v;
 }
 
-static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.7);
+static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.65);
 pub fn add_weight() -> f32 {
     *ADD_WEIGHT.read().unwrap()
 }
