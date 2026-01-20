@@ -65,3 +65,5 @@ The simulation itself works.
 
 - Add a slider to playback visualisation
 - Add graphs
+- toroidal wrap fuer spawns
+- 
