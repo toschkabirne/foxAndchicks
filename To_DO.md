@@ -59,6 +59,7 @@ The simulation itself works.
 # Neural 
 
 - Use fully connected NN
+- Create a simple NN that serves as a working starting point for evolution
 
 # Game
 
