@@ -24,10 +24,12 @@ pub struct SimulationSettings {
     pub max_prey_count: Option<usize>,
 
     // Sight settings
-    pub sight_range_predator: Option<f32>,
-    pub sight_range_prey: Option<f32>,
-    pub number_sights_prey: Option<usize>,
-    pub number_sights_predator: Option<usize>,
+    pub predator_sight_range: Option<f32>,
+    pub prey_sight_range: Option<f32>,
+    pub predator_sight_fov: Option<f32>,
+    pub prey_sight_fov: Option<f32>,
+    pub prey_sight_count: Option<usize>,
+    pub predator_sight_count: Option<usize>,
 
     // Predator settings
     pub predator_radius: Option<f32>,
@@ -67,10 +69,12 @@ impl SimulationSettings {
             max_pred_count: Some(settings::MAX_PRED_COUNT),
             max_prey_count: Some(settings::MAX_PREY_COUNT),
 
-            sight_range_predator: Some(settings::SIGHT_RANGE_PREDATOR),
-            sight_range_prey: Some(settings::SIGHT_RANGE_PREY),
-            number_sights_prey: Some(settings::NUMBER_SIGHTS_PREY),
-            number_sights_predator: Some(settings::NUMBER_SIGHTS_PREDATOR),
+            predator_sight_range: Some(settings::PREDATOR_SIGHT_RANGE),
+            prey_sight_range: Some(settings::PREY_SIGHT_RANGE),
+            predator_sight_fov: Some(settings::PREDATOR_SIGHT_FOV),
+            prey_sight_fov: Some(settings::PREY_SIGHT_FOV),
+            prey_sight_count: Some(settings::PREY_SIGHT_COUNT),
+            predator_sight_count: Some(settings::PREDATOR_SIGHT_COUNT),
 
             predator_radius: Some(settings::PREDATOR_RADIUS),
             predator_speed: Some(settings::PREDATOR_SPEED),
@@ -398,6 +402,7 @@ mod tests {
         let (settings, mut frame_reader) = DataManager::read_file(&actual_filename);
         assert_eq!(settings.screen_width, Some(crate::settings::SCREEN_WIDTH));
         assert_eq!(settings.screen_height, Some(crate::settings::SCREEN_HEIGHT));
+        assert_eq!(settings.predator_sight_range, Some(crate::settings::PREDATOR_SIGHT_RANGE));
 
         let read_frame = frame_reader.next().expect("Should have one frame");
         assert_eq!(read_frame.tick, 0);
