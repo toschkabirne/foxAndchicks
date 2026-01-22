@@ -19,6 +19,53 @@ pub fn window_conf() -> Conf {
     }
 }
 
+/// Draw a line that wraps around the toroidal world.
+/// If the line crosses a border, it draws the wrapped portion on the opposite side.
+pub fn draw_wrapped_line(start: Vec2, end: Vec2, width: f32, height: f32, thickness: f32, color: Color) {
+    // Draw the main line (possibly going outside bounds)
+    draw_line(start.x, start.y, end.x, end.y, thickness, color);
+
+    // Check if end point is outside bounds and draw wrapped segments
+    let mut offsets = Vec::new();
+
+    if end.x < 0.0 {
+        offsets.push(vec2(width, 0.0));
+    } else if end.x >= width {
+        offsets.push(vec2(-width, 0.0));
+    }
+
+    if end.y < 0.0 {
+        offsets.push(vec2(0.0, height));
+    } else if end.y >= height {
+        offsets.push(vec2(0.0, -height));
+    }
+
+    // Draw offset copies of the line for wrapping
+    for offset in &offsets {
+        draw_line(
+            start.x + offset.x,
+            start.y + offset.y,
+            end.x + offset.x,
+            end.y + offset.y,
+            thickness,
+            color,
+        );
+    }
+
+    // Handle corner case (both x and y wrap)
+    if offsets.len() == 2 {
+        let corner_offset = offsets[0] + offsets[1];
+        draw_line(
+            start.x + corner_offset.x,
+            start.y + corner_offset.y,
+            end.x + corner_offset.x,
+            end.y + corner_offset.y,
+            thickness,
+            color,
+        );
+    }
+}
+
 /// Draws the statistics panel on the right side of the game field
 pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize) {
     let panel_x = settings::SCREEN_WIDTH as f32;
@@ -52,6 +99,9 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize)
 
 /// Draws all animals in the given frame
 pub fn draw_frame(frame: &Frame, draw_sight_lines: bool) {
+    let world_w = settings::SCREEN_WIDTH as f32;
+    let world_h = settings::SCREEN_HEIGHT as f32;
+
     for animal in &frame.animals {
         match animal.animal_type {
             AnimalType::Predator => {
@@ -71,7 +121,14 @@ pub fn draw_frame(frame: &Frame, draw_sight_lines: bool) {
                         let end_x = animal.x + SIGHT_RANGE_PREDATOR * sight_angle.cos();
                         let end_y = animal.y + SIGHT_RANGE_PREDATOR * sight_angle.sin();
 
-                        draw_line(animal.x, animal.y, end_x, end_y, 1.0, YELLOW);
+                        draw_wrapped_line(
+                            vec2(animal.x, animal.y),
+                            vec2(end_x, end_y),
+                            world_w,
+                            world_h,
+                            1.0,
+                            YELLOW,
+                        );
                     }
                 }
                 draw_circle(animal.x, animal.y, PREDATOR_RADIUS, PREDATOR_COLOR);
@@ -86,7 +143,14 @@ pub fn draw_frame(frame: &Frame, draw_sight_lines: bool) {
                         let end_x = animal.x + SIGHT_RANGE_PREY * sight_angle.cos();
                         let end_y = animal.y + SIGHT_RANGE_PREY * sight_angle.sin();
 
-                        draw_line(animal.x, animal.y, end_x, end_y, 1.0, SKYBLUE);
+                        draw_wrapped_line(
+                            vec2(animal.x, animal.y),
+                            vec2(end_x, end_y),
+                            world_w,
+                            world_h,
+                            1.0,
+                            SKYBLUE,
+                        );
                     }
                 }
                 draw_circle(animal.x, animal.y, PREY_RADIUS, PREY_COLOR);

@@ -1,6 +1,8 @@
 use crate::brain_neural_network::NeuralNetwork;
 use crate::settings::*;
 use crate::spatial_hash::HasPos;
+use crate::visualization::draw_wrapped_line;
+
 use ::rand::Rng;
 use macroquad::prelude::*;
 use std::iter::IntoIterator;
@@ -65,53 +67,6 @@ pub fn normalize_angle(angle: f32) -> f32 {
 fn angle_lerp(a: f32, b: f32, t: f32) -> f32 {
     // Simple linear interpolation, then normalized to [-PI, PI]
     normalize_angle(a + (b - a) * t)
-}
-
-/// Draw a line that wraps around the toroidal world.
-/// If the line crosses a border, it draws the wrapped portion on the opposite side.
-fn draw_wrapped_line(start: Vec2, end: Vec2, width: f32, height: f32, thickness: f32, color: Color) {
-    // Draw the main line (possibly going outside bounds)
-    draw_line(start.x, start.y, end.x, end.y, thickness, color);
-
-    // Check if end point is outside bounds and draw wrapped segments
-    let mut offsets = Vec::new();
-
-    if end.x < 0.0 {
-        offsets.push(vec2(width, 0.0));
-    } else if end.x >= width {
-        offsets.push(vec2(-width, 0.0));
-    }
-
-    if end.y < 0.0 {
-        offsets.push(vec2(0.0, height));
-    } else if end.y >= height {
-        offsets.push(vec2(0.0, -height));
-    }
-
-    // Draw offset copies of the line for wrapping
-    for offset in &offsets {
-        draw_line(
-            start.x + offset.x,
-            start.y + offset.y,
-            end.x + offset.x,
-            end.y + offset.y,
-            thickness,
-            color,
-        );
-    }
-
-    // Handle corner case (both x and y wrap)
-    if offsets.len() == 2 {
-        let corner_offset = offsets[0] + offsets[1];
-        draw_line(
-            start.x + corner_offset.x,
-            start.y + corner_offset.y,
-            end.x + corner_offset.x,
-            end.y + corner_offset.y,
-            thickness,
-            color,
-        );
-    }
 }
 
 // -------------------- Shared Core --------------------

@@ -4,7 +4,7 @@ use crate::settings::*;
 use macroquad::prelude::*;
 use std::io::{self, Write};
 
-use predator_vs_prey::animals::{wrapped_distance_abs, Predator, Prey};
+use predator_vs_prey::animals::{Predator, Prey, wrapped_distance_abs};
 use predator_vs_prey::brain_neural_network::NeuralNetwork;
 use predator_vs_prey::*;
 
