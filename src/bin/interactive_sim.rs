@@ -125,9 +125,6 @@ async fn main() {
 
         // "Eaten" check: simple collision (Predator circle intersects Prey circle)
         let eat_r = PREDATOR_RADIUS + PREY_RADIUS;
-<<<<<<< HEAD:src/bin/interactive_sim_pred_prey.rs
-        if wrapped_distance_abs(predator.core.pos, prey.core.pos, SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32) < eat_r {
-=======
         if wrapped_distance_abs(
             predator.core.pos,
             prey.core.pos,
@@ -136,7 +133,6 @@ async fn main() {
         ) < eat_r
         {
             println!("Prey eaten! Spawning new prey.");
->>>>>>> main:src/bin/interactive_sim.rs
             prey = Prey::new(
                 (SCREEN_WIDTH / 2) as f32,
                 (SCREEN_HEIGHT / 2) as f32,
