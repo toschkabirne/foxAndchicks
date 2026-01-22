@@ -429,7 +429,7 @@ impl Predator {
         
         let angle = rng.gen_range(0.0..TWO_PI);
         // Create brain with predator-specific input count and mutation rate
-        let brain = NeuralNetwork::new(&[PREDATOR_SIGHT_COUNT, 6, 2], &mut *rng);
+        let brain = NeuralNetwork::new(&[PREDATOR_SIGHT_COUNT, 10, 2], &mut *rng);
 
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PRED_ENERGY, brain),
@@ -749,7 +749,7 @@ impl Prey {
     /// 4. Zero rest_time: Must survive to reproduce
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
         let angle = rng.gen_range(0.0..TWO_PI);
-        let brain = NeuralNetwork::new(&[PREY_SIGHT_COUNT, 6, 2], &mut *rng);
+        let brain = NeuralNetwork::new(&[PREY_SIGHT_COUNT, 10, 2], &mut *rng);
 
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PREY_ENERGY, brain),
