@@ -11,14 +11,14 @@ use macroquad::prelude::*;
 #[macroquad::main(window_conf)]
 async fn main() {
     let mut draw_sight_lines = true;
-    let mut filename: String = DEFAULT_DATA_FILE.to_string();
+    let mut filename: Option<String> = None;
 
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--no-sight" | "--no-sight-lines" => draw_sight_lines = false,
             "--file" | "-f" => {
-                filename = it.next().unwrap_or_else(|| DEFAULT_DATA_FILE.to_string());
+                filename = Some(it.next().unwrap_or_else(|| DEFAULT_DATA_FILE.to_string()));
             }
             "--help" | "-h" => {
                 println!("Run a live simulation with rendering.");
@@ -28,7 +28,7 @@ async fn main() {
                 println!();
                 println!("Options:");
                 println!("  --no-sight           Hide sight lines during simulation");
-                println!("  --file, -f <path>    Specify the output file path");
+                println!("  --file, -f <path>    Specify the output file path (if omitted, no data is saved)");
                 println!();
                 println!("Other binaries:");
                 println!("  cargo run --bin record -- [--file <path>] [--frames <num>]");
@@ -41,17 +41,16 @@ async fn main() {
                 return;
             }
             other => {
-                // Convenience: treat unknown single arg as filename
-                filename = other.to_string();
+                eprintln!("Unknown argument: {}", other);
             }
         }
     }
 
     println!("Running live simulation...");
-    run_live(&filename, draw_sight_lines).await;
+    run_live(filename.as_deref(), draw_sight_lines).await;
 }
 
-async fn run_live(filename: &str, draw_sight_lines: bool) {
+async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
     let mut game = Game::new_default(filename);
 
     // Run simulation with live rendering

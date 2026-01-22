@@ -1,68 +1,33 @@
-1. Data Structures
--> Find out if there are suitable Datastructures for more efficient Data access, runtime improvement
+# TODOs
 
-2. Matrix Multiplication
--> Improved Computations trough Sparse, LU etc might be achievable (or not)
-->  Maybe Sparse Matrix in Brain_Neural_Network.py hidden & input matrix, right now is dense
+Make sure to quickly mark something if you are working on it. Just put your name after the task and check the box after you finished it. :)
 
-3. Else, see @interactive_sim_obersvations.txt or @README.md 
+## DataManager
 
-4. The @profile_sim.py is a good start to find out where most time is spend, but 
-    needs more improvement. (Just a quickly AI-generated script)
+- [ ] Also store metadata s.a. max_preds, max_preys, init_NN_weights etc.
 
-5. The movement of the predators and preys is not optimal, this definitly needs to be improved
--> this needs to be tested, because in the end we want to have a kind of natural movement of the animals
--> in case that they have developted neural network brains
+## Animal
 
-6. @Brain_Neural_Network.py the activation function and initial weights have maybe to be optimized/adapted
--> maybe there is a bug in the infinity loop function 
-            
-    ```python
-    for i in range(self.num_outputs, ot_hi):
-        if np.all(self.Hidden_Matrix[i] == 0):
-            indexListe.remove(i) 
-            sampleReihnfolge.append(i)
-    ```
+- [x] Create animal class that predator and prey inherit from
+- [x] Is sight possible accross borders? It seems like preys tend to cluster at the borders
 
-!!! Removing and iterating over the same list is not a good idea !!!
+## Neural Network
 
+- [ ] Use fully connected NN
+- [ ] Initial weights: Create a simple NN that serves as a working starting point for evolution
+- [ ] Activation function: Check the behavior of different activation functions (e.g. sigmoid, ReLU, tanh)
+- [ ] Check if we can improve matrix multiplication (e.g. sparse matrix, decomposition etc..)
+    - [ ] Maybe Sparse Matrix in Brain_Neural_Network.py hidden & input matrix, right now is dense
+- [ ] Check if we should improve sightlines
+    - [ ] not only one line activated when animal gets close
+    - [ ] or new approach: maybe with some Angular calculation
 
-# OTHER OBSERVATIONS:
+## Game
 
-Problems:
-- new Neurons spwaning in the air 
-    
-    -> complete nonsense.
-    it leads to an overflow of death neurons not in use. 
-    New edges spawn to death neurons leads to rarly triggering the output neurons. 
+- [x] Add a slider to playback visualisation
+- [ ] Add graphs
+- [ ] toroidal wrap for spawns
 
-- The sightfield vecotors dont really work. 
-    -> only single neuron at a time is triggered. 
-    i should search for a different approach. 
-    - either same, but improve that several neurons are triggered (when animal gets closer). 
-    - or new approach: Maybe with some Angular calculation. 
+## General
 
-- For the output angle i have to check, wheter also minus values are possible. (probably -180 to 180 would be reasonable)
-    -> I want to be able to turn left and right.
-
-The simulation itself works.
-
-# DataManager
-
-- Also store metadata s.a. max_preds, max_preys, init_NN_weights etc.
-
-# Animal
-
-- Create animal class that predator and prey inherit from (DONE)
-- Is sight possible accross borders? (It seems like preys tend to cluster at the borders)
-
-# Neural 
-
-- Use fully connected NN
-- Create a simple NN that serves as a working starting point for evolution
-
-# Game
-
-- Add a slider to playback visualisation
-- Add graphs
-- toroidal wrap fuer spawns
+- [ ] Profiling: Check where the code spends the most time and why
