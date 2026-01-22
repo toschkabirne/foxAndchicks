@@ -4,7 +4,7 @@ Each neuron uses the ReLU activation function (can be changed later).
 Given some Layer-Topology, the network is constructed with random weights and biases and fully connected.
 */
 
-
+use crate::settings;
 use rand::Rng;
 
 
@@ -41,10 +41,10 @@ impl Layer {
         Self { neurons }
     }
 
-    fn propagate(&self, inputs: Vec<f32>) -> Vec<f32> {
+    fn forward_vectorized(&self, inputs: Vec<f32>, energy_factor: f32) -> Vec<f32> {
         let mut outputs = Vec::new();
         for neuron in &self.neurons {
-            let output = neuron.propagate(&inputs);
+            let output = neuron.forward_vectorized(&inputs, energy_factor);
             outputs.push(output);
         }
         outputs
@@ -63,14 +63,14 @@ impl Neuron {
         let weights = (0..input_size).map(|_| rng.random_range(-1.0..=1.0)).collect();
         Self { bias, weights }
     }
-    
-    fn propagate(&self, inputs: &[f32]) -> f32 {
+
+    fn forward_vectorized(&self, inputs: &[f32], energy_factor: f32) -> f32 {
         assert_eq!(inputs.len(), self.weights.len());
 
         let mut output = 0.0;
 
         for i in 0..inputs.len() {
-            output += inputs[i] * self.weights[i];
+            output += inputs[i] * self.weights[i] * energy_factor;
         }
 
         output += self.bias;
@@ -101,9 +101,9 @@ impl NeuralNetwork {
     }
 
 
-    pub fn propagate(&self, mut inputs: Vec<f32>) -> Vec<f32> {
+    pub fn forward_vectorized(&self, mut inputs: Vec<f32>, energy_factor: f32) -> Vec<f32> {
         for layer in &self.layers {
-            inputs = layer.propagate(inputs);
+            inputs = layer.forward_vectorized(inputs, energy_factor);
         }
         inputs
     }
