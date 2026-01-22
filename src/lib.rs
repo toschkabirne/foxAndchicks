@@ -1,5 +1,6 @@
 pub mod animals;
 pub mod brain_neural_network;
+pub mod brain_neural_network_2;
 pub mod data_manager;
 pub mod game;
 pub mod settings;

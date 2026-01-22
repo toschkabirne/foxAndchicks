@@ -133,7 +133,7 @@ impl Game {
                 // SAFETY: We only read from self.preys here, no mutation
                 let inputs = pred.get_inputs(scratch.iter().filter_map(|&i| preys_ref.get(i)));
 
-                pred.move_step(&inputs);
+                pred.move_step(inputs);
             },
         );
 
@@ -193,7 +193,7 @@ impl Game {
                 // SAFETY: We only read from self.predators here, no mutation
                 let inputs = prey.get_inputs(scratch.iter().filter_map(|&i| preds_ref.get(i)));
 
-                prey.move_step(&inputs);
+                prey.move_step(inputs);
             },
         );
 

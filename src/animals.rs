@@ -2,7 +2,7 @@
 // IMPORTS AND DEPENDENCIES
 // ============================================================================
 
-use crate::brain_neural_network::NeuralNetwork;
+use crate::brain_neural_network_2::NeuralNetwork;
 use crate::settings::*;
 use crate::spatial_hash::HasPos;
 
@@ -312,7 +312,7 @@ fn inherited_brain_with_mutations<R: Rng>(parent: &NeuralNetwork, rng: &mut R) -
     let mut brain = parent.clone();
     let k = rng.gen_range(2..=6); // Apply multiple mutations
     for _ in 0..k {
-        brain.mutate(rng);
+        brain.mutate(0.5, 0.5, &mut *rng);
     }
     brain
 }
@@ -426,9 +426,10 @@ impl Predator {
     /// 4. Zero kill count: Must prove itself by hunting
 
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
+        
         let angle = rng.gen_range(0.0..TWO_PI);
         // Create brain with predator-specific input count and mutation rate
-        let brain = NeuralNetwork::new(PREDATOR_SIGHT_COUNT, 2, pred_init_mut(), bias(), rng);
+        let brain = NeuralNetwork::new(&[PREDATOR_SIGHT_COUNT, 6, 2], &mut *rng);
 
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PRED_ENERGY, brain),
@@ -464,7 +465,7 @@ impl Predator {
     ///
     /// # Arguments
     /// * `inputs` - Sensory inputs from get_inputs (vision rays)
-    pub fn move_step(&mut self, inputs: &[f32]) {
+    pub fn move_step(&mut self, inputs: Vec<f32>) {
         // Passive energy decay (cost of living)
         self.core.energy -= PRED_DEFAULT_DECAY;
 
@@ -748,7 +749,7 @@ impl Prey {
     /// 4. Zero rest_time: Must survive to reproduce
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
         let angle = rng.gen_range(0.0..TWO_PI);
-        let brain = NeuralNetwork::new(PREY_SIGHT_COUNT, 2, prey_init_mut(), bias(), rng);
+        let brain = NeuralNetwork::new(&[PREY_SIGHT_COUNT, 6, 2], &mut *rng);
 
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PREY_ENERGY, brain),
@@ -803,7 +804,7 @@ impl Prey {
     ///
     /// # Arguments
     /// * `inputs` - Sensory inputs from get_inputs (vision sectors)
-    pub fn move_step(&mut self, inputs: &[f32]) {
+    pub fn move_step(&mut self, inputs: Vec<f32>) {
         let energy_ratio = self.core.energy / PREY_ENERGY;
         let outputs = self.core.brain.forward_vectorized(inputs, energy_ratio);
 

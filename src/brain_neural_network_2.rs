@@ -33,10 +33,10 @@ pub struct LayerTopology {
 
 
 impl Layer {
-    fn new(input_size: usize, output_size: usize) -> Self {
+    fn new<R: Rng>(input_size: usize, output_size: usize, mut rng: R) -> Self {
         let mut neurons = Vec::with_capacity(output_size);
         for _ in 0..output_size {
-            neurons.push(Neuron::new(input_size));
+            neurons.push(Neuron::new(input_size, &mut rng));
         }
         Self { neurons }
     }
@@ -57,10 +57,9 @@ impl Layer {
 
 
 impl Neuron {
-    fn new(input_size: usize) -> Self {
-        let mut rng = rand::rng();
-        let bias = rng.random_range(-1.0..=1.0);
-        let weights = (0..input_size).map(|_| rng.random_range(-1.0..=1.0)).collect();
+    fn new<R: Rng>(input_size: usize, mut rng: R) -> Self {
+        let bias = rng.gen_range(-1.0..=1.0);
+        let weights = (0..input_size).map(|_| rng.gen_range(-1.0..=1.0)).collect();
         Self { bias, weights }
     }
 
@@ -85,7 +84,8 @@ impl Neuron {
 
 
 impl NeuralNetwork {
-    pub fn new(layers: &[LayerTopology]) -> Self {
+    pub fn new<R: Rng>(layers: &[usize], mut rng: R) -> Self {
+        let layers: Vec<LayerTopology> = layers.iter().map(|&n| LayerTopology { neurons: n }).collect();
         assert!(layers.len() > 1, "Network must have at least input and output layers");
         let mut network_layers = Vec::new();
 
@@ -93,7 +93,7 @@ impl NeuralNetwork {
             let input_size = layers[i].neurons;
             let output_size = layers[i + 1].neurons;
 
-            network_layers.push(Layer::new(input_size, output_size));
+            network_layers.push(Layer::new(input_size, output_size, &mut rng));
             
         }
 
@@ -108,17 +108,17 @@ impl NeuralNetwork {
         inputs
     }
 
-    pub fn mutate(&mut self, mutation_rate: f32, mutation_amount: f32) {
-        let mut rng = rand::rng();
+    pub fn mutate<R: Rng>(&mut self, mutation_rate: f32, mutation_amount: f32, mut rng: R) {
+        
 
         for layer in &mut self.layers {
             for neuron in &mut layer.neurons {
-                if rng.random::<f32>() < mutation_rate {
-                    neuron.bias += rng.random_range(-mutation_amount..=mutation_amount);
+                if rng.gen::<f32>() < mutation_rate {
+                    neuron.bias += rng.gen_range(-mutation_amount..=mutation_amount);
                 }
                 for weight in &mut neuron.weights {
-                    if rng.random::<f32>() < mutation_rate {
-                        *weight += rng.random_range(-mutation_amount..=mutation_amount);
+                    if rng.gen::<f32>() < mutation_rate {
+                        *weight += rng.gen_range(-mutation_amount..=mutation_amount);
                     }
                 }
             }
@@ -134,23 +134,23 @@ impl NeuralNetwork {
         }
     }
 
-    pub fn add_layer(&mut self, position: usize, topology: &LayerTopology) {
+    pub fn add_layer<R: Rng>(&mut self, position: usize, topology: &LayerTopology, mut rng: R) {
         assert!(position > 0 && position < self.layers.len(), "Position out of bounds");
 
         let input_size = self.layers[position - 1].neurons.len();
         let output_size = topology.neurons;
 
-        let new_layer = Layer::new(input_size, output_size);
+        let new_layer = Layer::new(input_size, output_size, &mut rng);
 
         self.layers.insert(position, new_layer);
 
         let next_layer_input_size = output_size;
         let next_layer_output_size = self.layers[position + 1].neurons.len();
 
-        let mut adjusted_next_layer = Layer::new(next_layer_input_size, next_layer_output_size);
+        let mut adjusted_next_layer = Layer::new(next_layer_input_size, next_layer_output_size, &mut rng);
 
         for _neuron in &self.layers[position + 1].neurons {
-            adjusted_next_layer.add_neuron(Neuron::new(next_layer_input_size));
+            adjusted_next_layer.add_neuron(Neuron::new(next_layer_input_size, &mut rng));
         }
 
         self.layers[position + 1] = adjusted_next_layer;
