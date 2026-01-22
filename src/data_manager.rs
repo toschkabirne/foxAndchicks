@@ -150,17 +150,25 @@ impl DataManager {
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        let base = Path::new(base)
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or(base)
-            .trim_end_matches(".bin");
         
-        // Ensure simulations directory exists
-        let simulations_dir = "simulations";
-        fs::create_dir_all(simulations_dir).expect("Failed to create simulations directory");
-        
-        format!("{}/{}_{}.bin", simulations_dir, base, timestamp)
+        let path = Path::new(base);
+        if path.is_absolute() {
+            let parent = path.parent().unwrap_or(Path::new(""));
+            let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(base);
+            format!("{}/{}_{}.bin", parent.display(), file_stem, timestamp)
+        } else {
+            let base_name = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or(base)
+                .trim_end_matches(".bin");
+            
+            // Ensure simulations directory exists
+            let simulations_dir = "simulations";
+            fs::create_dir_all(simulations_dir).expect("Failed to create simulations directory");
+            
+            format!("{}/{}_{}.bin", simulations_dir, base_name, timestamp)
+        }
     }
 
     /// Returns the settings filename for a given data filename.
@@ -411,6 +419,10 @@ mod tests {
         // Verify settings JSON file was created
         let settings_path = DataManager::settings_filename(&actual_filename);
         assert!(std::path::Path::new(&settings_path).exists());
+
+        // Cleanup
+        let _ = std::fs::remove_file(&actual_filename);
+        let _ = std::fs::remove_file(&settings_path);
     }
 
     #[test]
@@ -428,5 +440,9 @@ mod tests {
         assert_eq!(settings.frames_per_second, Some(crate::settings::FRAMES_PER_SECOND));
         assert_eq!(settings.pred_init_numb, Some(crate::settings::PRED_INIT_NUMB));
         assert_eq!(settings.prey_init_numb, Some(crate::settings::PREY_INIT_NUMB));
+
+        // Cleanup
+        let _ = std::fs::remove_file(&actual_filename);
+        let _ = std::fs::remove_file(&settings_path);
     }
 }

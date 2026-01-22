@@ -126,11 +126,11 @@ fn run_simulation(params_raw: &serde_json::Value, max_steps: i64) -> SimResult {
 
     // Create game using your encapsulated logic
     let mut game = Game::new(
-        "ignore.csv", // DataManager is only used if you store frames
+        None, // DataManager is not used in headless mode
         settings::PRED_INIT_NUMB,
         settings::PREY_INIT_NUMB,
         settings::MAX_PRED_COUNT,
-        settings::MAX_PREY_COUNT, // OR pass from params if you add it
+        settings::MAX_PREY_COUNT,
     );
 
     let start = Instant::now();
