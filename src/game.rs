@@ -17,7 +17,7 @@ pub struct Game {
     spatial_hash_preys: SpatialHash,
     max_predators: usize,
     max_preys: usize,
-    data_manager: DataManager,
+    data_manager: Option<DataManager>,
 }
 
 impl Game {
@@ -27,16 +27,16 @@ impl Game {
     pub fn prey_count(&self) -> usize {
         self.preys.len()
     }
-    /// Returns the actual filename (with timestamp) used for storing data
-    pub fn get_data_filename(&self) -> &str {
-        &self.data_manager.filename
+    /// Returns the actual filename (with timestamp) used for storing data, if any
+    pub fn get_data_filename(&self) -> Option<&str> {
+        self.data_manager.as_ref().map(|dm| dm.filename.as_str())
     }
 }
 
 impl Game {
     /// Creates a new Game with custom parameters
     pub fn new(
-        file_name: &str,
+        file_name: Option<&str>,
         num_preds: usize,
         num_preys: usize,
         max_preds: usize,
@@ -77,7 +77,7 @@ impl Game {
         let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_pred, world_w, world_h);
         let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_prey, world_w, world_h);
 
-        let data_manager: DataManager = DataManager::new(file_name);
+        let data_manager = file_name.map(|name| DataManager::new(name));
 
         Game {
             frame_count: 0,
@@ -92,7 +92,7 @@ impl Game {
     }
 
     /// Creates a new Game with default settings
-    pub fn new_default(file_name: &str) -> Self {
+    pub fn new_default(file_name: Option<&str>) -> Self {
         Game::new(
             file_name,
             settings::PRED_INIT_NUMB,
@@ -194,7 +194,9 @@ impl Game {
 
     pub fn calculate_and_store_next_frame(&mut self) {
         let frame = self.next_frame();
-        self.data_manager.store_frame(&frame);
+        if let Some(ref mut dm) = self.data_manager {
+            dm.store_frame(&frame);
+        }
     }
 
     pub async fn playback(file_name: &str, draw_sight_lines: bool) {

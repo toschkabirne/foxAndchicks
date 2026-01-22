@@ -50,7 +50,7 @@ fn main() {
 }
 
 fn record(filename: &str, total_frames: i32) {
-    let mut game = Game::new_default(filename);
+    let mut game = Game::new_default(Some(filename));
 
     // Record headless (no rendering)
     for i in 0..total_frames {
