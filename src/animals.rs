@@ -27,10 +27,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
 
 /// Pre-calculated constant for 2π (full circle in radians).
-///
-/// Design rationale: We compute this at compile time to avoid repeated
-/// calculations during runtime. This is used frequently in angle normalization
-/// and prey's 360° vision calculation, so caching it improves performance.
 const TWO_PI: f32 = 2.0 * PI;
 
 // ============================================================================
@@ -65,13 +61,8 @@ fn next_id() -> usize {
 /// back into bounds using modular arithmetic.
 ///
 /// Design rationale: We use `rem_euclid` instead of the `%` operator because
-/// it handles negative numbers correctly (e.g., -1.0 wraps to width-1.0).
-/// This is critical for smooth movement across boundaries.
-///
-/// # Arguments
-/// * `pos` - The position to wrap (can be outside bounds)
-/// * `width` - World width
-/// * `height` - World height
+/// it handles negative numbers correctly
+
 #[inline]
 pub fn wrap_position(pos: Vec2, width: f32, height: f32) -> Vec2 {
     vec2(pos.x.rem_euclid(width), pos.y.rem_euclid(height))
@@ -89,14 +80,7 @@ pub fn wrap_position(pos: Vec2, width: f32, height: f32) -> Vec2 {
 /// 2. Hunting logic: Predators should chase prey via the shortest path.
 /// 3. Angle calculations: Animals should turn toward the nearest instance of
 ///    their target, accounting for world wrapping.
-///
-/// The algorithm works by checking if the direct path is longer than half the
-/// world size. If so, going the "other way" (across the boundary) is shorter.
-///
-/// # Returns
-/// A vector pointing from `a` to `b`, with components in range:
-/// * dx ∈ [-width/2, width/2]
-/// * dy ∈ [-height/2, height/2]
+
 #[inline]
 pub fn wrapped_distance_vector(a: Vec2, b: Vec2, width: f32, height: f32) -> Vec2 {
     let mut dx = b.x - a.x;
@@ -137,22 +121,10 @@ pub fn wrapped_distance_abs(a: Vec2, b: Vec2, width: f32, height: f32) -> f32 {
 // ============================================================================
 
 /// Normalizes an angle to the range [-π, π].
-///
-/// Design rationale: Angles can accumulate over time (e.g., an animal turning
-/// continuously in one direction). Without normalization, angles would grow
-/// unbounded, potentially causing:
-/// 1. Numerical precision issues with large float values
-/// 2. Difficulties comparing angles (is 7π the same direction as π?)
-/// 3. Wraparound bugs in angle calculations
-///
 /// We use [-π, π] instead of [0, 2π] because it makes angular differences
 /// easier to interpret: a difference of 0.1 means "turn slightly right",
 /// regardless of absolute heading.
-///
-/// # Algorithm
-/// 1. Add π to shift range from [-π, π] to [0, 2π]
-/// 2. Apply modulo 2π to wrap to [0, 2π]
-/// 3. Subtract π to shift back to [-π, π]
+
 #[inline]
 pub fn normalize_angle(angle: f32) -> f32 {
     (angle + PI).rem_euclid(TWO_PI) - PI
@@ -189,19 +161,7 @@ fn angle_lerp(a: f32, b: f32, t: f32) -> f32 {
 /// Design rationale: When visualizing animal vision rays, a ray might extend
 /// beyond the world boundary. To properly show the toroidal nature of the world,
 /// we need to draw the "continuation" of the line on the opposite side.
-///
-/// For example, if a predator at x=50 looks left with a vision ray extending
-/// to x=-100, we need to:
-/// 1. Draw the ray from x=50 to x=0 (normal)
-/// 2. Draw the continuation from x=width to x=width-100 (wrapped portion)
-///
-/// This makes it visually clear that animals can see across boundaries.
-///
-/// # Algorithm
-/// 1. Always draw the main line (may extend outside bounds)
-/// 2. Check if the endpoint is outside boundaries
-/// 3. For each boundary crossed, draw an offset copy of the line
-/// 4. Handle corner cases where both x and y boundaries are crossed
+
 fn draw_wrapped_line(
     start: Vec2,
     end: Vec2,
@@ -255,20 +215,138 @@ fn draw_wrapped_line(
     }
 }
 
+impl Predator {
+    pub fn get_inputs<'a, I>(&self, preys: I) -> Vec<f32>
+    where
+        I: IntoIterator<Item = &'a Prey>,
+    {
+        AnimalCore::sense_animals(
+            &self.core,
+            preys,
+            NUMBER_SIGHTS_PREDATOR,
+            SIGHT_RANGE_PREDATOR,
+            SIGHT_ANGLE_PREDATOR, // degrees total
+            PREY_RADIUS,
+        )
+    }
+}
+impl Prey {
+    pub fn sense_predators<'a, I>(&self, predators: I) -> Vec<f32>
+    where
+        I: IntoIterator<Item = &'a Predator>,
+    {
+        AnimalCore::sense_animals(
+            &self.core,
+            predators,
+            NUMBER_SIGHTS_PREY,
+            SIGHT_RANGE_PREY,
+            SIGHT_ANGLE_PREY,
+            PREDATOR_RADIUS,
+        )
+    }
+}
+
+impl AnimalCore {
+    pub fn sense_animals<'a, I, T>(
+        core: &AnimalCore,
+        enemies: I,
+        number_sights: usize,
+        sight_range: f32,
+        sight_angle: f32,
+        enemy_radius: f32,
+    ) -> Vec<f32>
+    where
+        I: IntoIterator<Item = &'a T>,
+        T: HasCore + 'a,
+    {
+        let n = number_sights.max(1);
+        let mut inputs = vec![0.0; n];
+
+        let cone_half_angle = (sight_angle / 2.0_f32).to_radians();
+        // Define the vision cone boundaries
+        let start_angle = normalize_angle(core.angle - cone_half_angle);
+        let end_angle = normalize_angle(core.angle + cone_half_angle);
+
+        let animal_pos = core.pos;
+        let world_w = SCREEN_WIDTH as f32;
+        let world_h = SCREEN_HEIGHT as f32;
+
+        for enemy in enemies {
+            let enemy_pos = enemy.core().pos;
+
+            // Compute shortest vector to prey (accounting for world wrapping)
+            let delta = wrapped_distance_vector(animal_pos, enemy_pos, world_w, world_h);
+            let dist = delta.length();
+
+            // Skip if prey is too close (div-by-zero) or out of range
+            if dist <= 0.0 || dist >= sight_range {
+                continue;
+            }
+            // Compute angle to prey using wrapped delta
+            let angle_to_enemy = delta.y.atan2(delta.x);
+
+            // Variante 1:
+            // // Calculate angular width of prey "disc" at this distance
+            // // This is the half-angle subtended by the prey's radius
+            // let mut val = PREY_RADIUS / dist;
+            // if val > 1.0 {
+            //     val = 1.0; // Clamp for arcsin domain
+            // }
+            // let angular_width = val.asin();
+
+            // Variante 2:
+            let angular_width = (enemy_radius).atan2(dist);
+
+            // Check each vision ray to see if prey overlaps with it
+            for i in 0..n {
+                if inputs[i] == 1.0 {
+                    continue; // This ray already detected prey
+                }
+
+                // Interpolate angle for this ray within the vision cone
+                let t = if n > 1 {
+                    i as f32 / (n as f32 - 1.0) // Map index to [0, 1]
+                } else {
+                    0.5 // Single ray: use middle of cone
+                };
+
+                //Variante1:
+                // let ray_angle = angle_lerp(start_angle, end_angle, t);
+
+                //Variante 2:
+                let offset = -cone_half_angle + (2.0 * cone_half_angle) * t; // [-cone_half .. +cone_half]
+                let ray_angle = normalize_angle(core.angle + offset);
+
+                // Check if prey's angular disc overlaps this ray
+                let diff = normalize_angle(ray_angle - angle_to_enemy).abs();
+                if diff <= angular_width {
+                    inputs[i] = 1.0; // Prey detected on this ray!
+                }
+            }
+        }
+
+        inputs
+    }
+}
+
+pub trait HasCore {
+    fn core(&self) -> &AnimalCore;
+}
+
+impl HasCore for Prey {
+    fn core(&self) -> &AnimalCore {
+        &self.core
+    }
+}
+
+impl HasCore for Predator {
+    fn core(&self) -> &AnimalCore {
+        &self.core
+    }
+}
+
 // ============================================================================
 // SHARED ANIMAL CORE
-// ============================================================================
-// Design rationale for AnimalCore:
-// Both Predator and Prey share common attributes (position, angle, energy,
-// brain). Instead of duplicating these fields and their methods, we extract
-// them into a shared struct. This follows the DRY principle and ensures
-// consistency in how core properties are accessed and modified.
-//
-// Why not use inheritance/traits?
-// Rust doesn't have classical inheritance. While we could use composition
-// with traits, the simple struct approach is more idiomatic for data that
-// truly is shared. Each animal type (Predator/Prey) then adds its specific
-// fields (e.g., eaten_prey, rest_time) as needed.
 // ============================================================================
 
 /// Core data shared by all animals (Predators and Prey).
@@ -289,15 +367,7 @@ pub struct AnimalCore {
     /// Current energy level (animal dies/cannot reproduce when too low)
     pub energy: f32,
 
-    /// Neural network brain that controls decision-making
-    ///
-    /// Design rationale: Each animal owns its brain (no Rc<RefCell<>>).
-    /// This was refactored from a shared pointer approach to improve:
-    /// 1. Memory safety: No risk of multiple mutable borrows
-    /// 2. Performance: No runtime borrow checking overhead
-    /// 3. Clarity: Each animal clearly owns and controls its own brain
-    /// 4. Evolution: Mutations create new brain instances rather than
-    ///    modifying shared state
+    /// Neural network brain that controls decision-making, each animal owns its brain
     pub brain: NeuralNetwork,
 }
 
@@ -317,9 +387,6 @@ impl AnimalCore {
     }
 
     /// Returns the x-coordinate of the animal's position.
-    ///
-    /// Design rationale: These getters provide a consistent interface for
-    /// position access, used by the spatial hash for efficient neighbor queries.
     #[inline]
     pub fn x(&self) -> f32 {
         self.pos.x
@@ -332,9 +399,7 @@ impl AnimalCore {
     }
 
     /// Sets a new position for the animal.
-    ///
-    /// Design rationale: The spatial hash uses this to update positions
-    /// after movement.
+    /// The spatial hash uses this to update positions after movement.
     #[inline]
     pub fn set_xy(&mut self, x: f32, y: f32) {
         self.pos = vec2(x, y);
@@ -347,17 +412,7 @@ impl AnimalCore {
 /// When an animal reproduces, its child inherits the parent's brain structure
 /// and weights, but with small random changes (mutations). Over generations,
 /// beneficial mutations lead to better survival and more offspring.
-///
-/// Why multiple mutations (k = 2..=6)?
-/// - Too few mutations: Evolution is extremely slow
-/// - Too many mutations: Children are too different from successful parents,
-///   losing beneficial traits
-/// - Random range: Adds variation in mutation rate, allowing the population
-///   to explore the fitness landscape at different speeds
-///
-/// # Arguments
-/// * `parent` - The parent's neural network to inherit from
-/// * `rng` - Random number generator for mutation randomness
+
 #[inline]
 fn inherited_brain_with_mutations<R: Rng>(parent: &NeuralNetwork, rng: &mut R) -> NeuralNetwork {
     let mut brain = parent.clone();
@@ -369,23 +424,20 @@ fn inherited_brain_with_mutations<R: Rng>(parent: &NeuralNetwork, rng: &mut R) -
 }
 
 /// Performs a movement step for an animal, updating position, angle, and energy.
-///
 /// This is shared movement logic used by both Predators and Prey.
 ///
 /// Design rationale:
 /// 1. **Quadratic energy cost**: Energy cost is proportional to speed_factor²,
-///    not speed_factor. This creates a strong selective pressure for efficiency:
+///    This creates a strong selective pressure for efficiency:
 ///    - Moving at half speed costs 1/4 the energy
 ///    - Animals must balance speed vs. energy conservation
 ///    - Encourages prey to "rest" when safe, predators to hunt strategically
 ///
 /// 2. **Energy capping**: We prevent energy from exceeding max_energy to avoid
-///    exploits where animals could accumulate unlimited energy through resting
-///    or eating. This keeps energy as a meaningful constraint.
+///    exploits where animals could accumulate unlimited energy through resting or eating.
 ///
 /// 3. **Separated turning and movement**: Animals first turn, then move forward.
-///    This matches how real organisms typically orient before moving, and makes
-///    the neural network's task clearer (one output for direction, one for speed).
+///    This matches how real organisms typically orient before moving.
 ///
 /// # Arguments
 /// * `core` - The animal's core state (position, angle, energy)
@@ -427,7 +479,7 @@ fn move_with_speed_factor(
 // ============================================================================
 // Design rationale for Predator:
 // Predators are the "hunters" in the simulation. They must:
-// 1. Detect prey using limited forward-facing vision (realistic constraint)
+// 1. Detect prey using limited forward-facing vision
 // 2. Chase and catch prey (collision detection)
 // 3. Manage energy carefully (hunting costs energy, eating restores it)
 // 4. Reproduce when successful (evolutionary reward for good hunters)
@@ -444,26 +496,12 @@ pub struct Predator {
     /// Core animal state (position, angle, energy, brain)
     pub core: AnimalCore,
 
-    /// Counter for prey eaten since last reproduction.
-    ///
-    /// Design rationale: This implements a "reproduction threshold" mechanic.
-    /// Predators must catch 3 prey to reproduce, which:
-    /// 1. Prevents exponential predator growth (would crash the ecosystem)
-    /// 2. Creates selective pressure for hunting skill
-    /// 3. Ties reproduction to actual survival fitness (catching prey)
-    /// 4. Naturally limits predator population to prey availability
+    /// Counter for prey eaten since last reproduction, if >c they reproduce
     pub eaten_prey: i32,
 
     /// Cooldown timer preventing immediate re-reproduction.
-    ///
-    /// Design rationale: After reproducing, a predator cannot reproduce again
-    /// for several frames, even if it catches 3 more prey. This prevents:
-    /// 1. Population explosion in prey-rich areas
-    /// 2. Unrealistic "rapid-fire" reproduction
-    /// 3. Spatial clustering of predators (they need time to spread)
-    ///
-    /// The German comment "frames bis fressen wieder erlaubt" confirms this
-    /// is a frame-based cooldown.
+    /// After reproducing, a predator cannot reproduce again
+    /// for several frames, even if it catches 3 more prey. This prevents population explosion
     pub repro_cooldown: i32,
 }
 
@@ -471,9 +509,7 @@ pub struct Predator {
 ///
 /// Design rationale: The spatial hash accelerates "find nearby entities" queries
 /// from O(n) to O(1) average case. This is critical for performance when checking:
-/// - What prey can thisпредаtor see?
-/// - What predators can this prey see?
-/// - Is this predator close enough to eat this prey?
+
 impl HasPos for Predator {
     fn x(&self) -> f32 {
         self.core.x()
@@ -494,10 +530,7 @@ impl Predator {
     /// 2. Fresh neural network: Initialized with `pred_init_mut()` mutation rate
     /// 3. Full energy: Gives new predators a fair chance to hunt
     /// 4. Zero kill count: Must prove itself by hunting
-    ///
-    /// # Arguments
-    /// * `x`, `y` - Starting position
-    /// * `rng` - Random number generator
+
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
         let angle = rng.gen_range(0.0..TWO_PI);
         // Create brain with predator-specific input count and mutation rate
@@ -554,68 +587,78 @@ impl Predator {
     ///
     /// # Returns
     /// Vector of floats (0.0 or 1.0) representing each vision ray
-    pub fn get_inputs<'a, I>(&self, preys: I) -> Vec<f32>
-    where
-        I: IntoIterator<Item = &'a Prey>,
-    {
-        let n = NUMBER_SIGHTS_PREDATOR.max(1);
-        let mut inputs = vec![0.0; n];
+    // pub fn get_inputs<'a, I>(&self, preys: I) -> Vec<f32>
+    // where
+    //     I: IntoIterator<Item = &'a Prey>,
+    // {
+    //     let n = NUMBER_SIGHTS_PREDATOR.max(1);
+    //     let mut inputs = vec![0.0; n];
 
-        // Define the vision cone boundaries
-        let start_angle = normalize_angle(self.core.angle - 30.0_f32.to_radians());
-        let end_angle = normalize_angle(self.core.angle + 30.0_f32.to_radians());
+    //     // Define the vision cone boundaries
+    //     let start_angle = normalize_angle(self.core.angle - 30.0_f32.to_radians());
+    //     let end_angle = normalize_angle(self.core.angle + 30.0_f32.to_radians());
 
-        let predator_pos = self.core.pos;
-        let world_w = SCREEN_WIDTH as f32;
-        let world_h = SCREEN_HEIGHT as f32;
+    //     let predator_pos = self.core.pos;
+    //     let world_w = SCREEN_WIDTH as f32;
+    //     let world_h = SCREEN_HEIGHT as f32;
 
-        for prey in preys {
-            let prey_pos = prey.core.pos;
+    //     for prey in preys {
+    //         let prey_pos = prey.core.pos;
 
-            // Compute shortest vector to prey (accounting for world wrapping)
-            let delta = wrapped_distance_vector(predator_pos, prey_pos, world_w, world_h);
-            let dist = delta.length();
+    //         // Compute shortest vector to prey (accounting for world wrapping)
+    //         let delta = wrapped_distance_vector(predator_pos, prey_pos, world_w, world_h);
+    //         let dist = delta.length();
 
-            // Skip if prey is too close (div-by-zero) or out of range
-            if dist <= 0.0 || dist >= SIGHT_RANGE_PREDATOR {
-                continue;
-            }
+    //         // Skip if prey is too close (div-by-zero) or out of range
+    //         if dist <= 0.0 || dist >= SIGHT_RANGE_PREDATOR {
+    //             continue;
+    //         }
+    //         // Compute angle to prey using wrapped delta
+    //         let angle_to_prey = delta.y.atan2(delta.x);
 
-            // Compute angle to prey using wrapped delta
-            let angle_to_prey = delta.y.atan2(delta.x);
+    //         // Variante 1:
+    //         // // Calculate angular width of prey "disc" at this distance
+    //         // // This is the half-angle subtended by the prey's radius
+    //         // let mut val = PREY_RADIUS / dist;
+    //         // if val > 1.0 {
+    //         //     val = 1.0; // Clamp for arcsin domain
+    //         // }
+    //         // let angular_width = val.asin();
 
-            // Calculate angular width of prey "disc" at this distance
-            // This is the half-angle subtended by the prey's radius
-            let mut val = PREY_RADIUS / dist;
-            if val > 1.0 {
-                val = 1.0; // Clamp for arcsin domain
-            }
-            let angular_width = val.asin();
+    //         // Variante 2:
+    //         let angular_width = (PREY_RADIUS).atan2(dist);
 
-            // Check each vision ray to see if prey overlaps with it
-            for i in 0..n {
-                if inputs[i] == 1.0 {
-                    continue; // This ray already detected prey
-                }
+    //         // Check each vision ray to see if prey overlaps with it
+    //         for i in 0..n {
+    //             if inputs[i] == 1.0 {
+    //                 continue; // This ray already detected prey
+    //             }
 
-                // Interpolate angle for this ray within the vision cone
-                let t = if n > 1 {
-                    i as f32 / (n as f32 - 1.0) // Map index to [0, 1]
-                } else {
-                    0.0 // Single ray: use middle of cone
-                };
-                let ray_angle = angle_lerp(start_angle, end_angle, t);
+    //             // Interpolate angle for this ray within the vision cone
+    //             let t = if n > 1 {
+    //                 i as f32 / (n as f32 - 1.0) // Map index to [0, 1]
+    //             } else {
+    //                 0.5 // Single ray: use middle of cone
+    //             };
 
-                // Check if prey's angular disc overlaps this ray
-                let diff = normalize_angle(ray_angle - angle_to_prey).abs();
-                if diff < angular_width {
-                    inputs[i] = 1.0; // Prey detected on this ray!
-                }
-            }
-        }
+    //             //Variante1:
+    //             // let ray_angle = angle_lerp(start_angle, end_angle, t);
 
-        inputs
-    }
+    //             //Variante 2:
+    //             let cone_half = 30.0_f32.to_radians();
+    //             let offset = -cone_half + (2.0 * cone_half) * t; // [-cone_half .. +cone_half]
+    //             let ray_angle = normalize_angle(self.core.angle + offset);
+
+    //             // Check if prey's angular disc overlaps this ray
+    //             let diff = normalize_angle(ray_angle - angle_to_prey).abs();
+    //             if diff <= angular_width {
+    //                 inputs[i] = 1.0; // Prey detected on this ray!
+    //             }
+    //         }
+    //     }
+
+    //     inputs
+    // }
 
     /// Executes one movement/decision step for the predator.
     ///
@@ -650,7 +693,7 @@ impl Predator {
 
         // Extract and clamp movement parameters
         let speed_factor = outputs[0].clamp(0.0, 1.0);
-        let turn_delta = outputs[1].clamp(-1.0, 1.0) * std::f32::consts::FRAC_PI_2;
+        let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
 
         // Apply movement (includes additional energy cost)
         move_with_speed_factor(
@@ -997,50 +1040,50 @@ impl Prey {
     ///
     /// # Returns
     /// Vector of floats (0.0 or 1.0) representing each vision sector
-    pub fn sense_predators<'a, I>(&self, predators: I) -> Vec<f32>
-    where
-        I: IntoIterator<Item = &'a Predator>,
-    {
-        let n = NUMBER_SIGHTS_PREY.max(1);
-        let mut inputs = vec![0.0; n];
+    // pub fn sense_predators<'a, I>(&self, predators: I) -> Vec<f32>
+    // where
+    //     I: IntoIterator<Item = &'a Predator>,
+    // {
+    //     let n = NUMBER_SIGHTS_PREY.max(1);
+    //     let mut inputs = vec![0.0; n];
 
-        // Size of each angular sector (in radians)
-        let sector_size = TWO_PI / (n as f32);
-        let prey_pos = self.core.pos;
-        let world_w = SCREEN_WIDTH as f32;
-        let world_h = SCREEN_HEIGHT as f32;
+    //     // Size of each angular sector (in radians)
+    //     let sector_size = TWO_PI / (n as f32);
+    //     let prey_pos = self.core.pos;
+    //     let world_w = SCREEN_WIDTH as f32;
+    //     let world_h = SCREEN_HEIGHT as f32;
 
-        for pred in predators {
-            let pred_pos = pred.core.pos;
+    //     for pred in predators {
+    //         let pred_pos = pred.core.pos;
 
-            // Compute shortest vector to predator (toroidal world)
-            let delta = wrapped_distance_vector(prey_pos, pred_pos, world_w, world_h);
-            let dist = delta.length();
+    //         // Compute shortest vector to predator (toroidal world)
+    //         let delta = wrapped_distance_vector(prey_pos, pred_pos, world_w, world_h);
+    //         let dist = delta.length();
 
-            // Skip if out of vision range
-            if dist >= SIGHT_RANGE_PREY {
-                continue;
-            }
+    //         // Skip if out of vision range
+    //         if dist >= SIGHT_RANGE_PREY {
+    //             continue;
+    //         }
 
-            // Calculate angle to predator in world coordinates
-            let angle_to_pred = delta.y.atan2(delta.x);
+    //         // Calculate angle to predator in world coordinates
+    //         let angle_to_pred = delta.y.atan2(delta.x);
 
-            // Convert to prey-relative angle (which direction relative to prey's heading?)
-            let rel = normalize_angle(angle_to_pred - self.core.angle); // [-PI, PI]
+    //         // Convert to prey-relative angle (which direction relative to prey's heading?)
+    //         let rel = normalize_angle(angle_to_pred - self.core.angle); // [-PI, PI]
 
-            // Map to [0, TWO_PI) for positive indexing
-            let shifted = rel + PI;
+    //         // Map to [0, TWO_PI) for positive indexing
+    //         let shifted = rel + PI;
 
-            // Find which sector this predator falls into
-            let idx = (shifted / sector_size).floor() as i32;
-            let idx = idx.rem_euclid(n as i32) as usize; // Handle wraparound
+    //         // Find which sector this predator falls into
+    //         let idx = (shifted / sector_size).floor() as i32;
+    //         let idx = idx.rem_euclid(n as i32) as usize; // Handle wraparound
 
-            // Mark this sector as "predator detected"
-            inputs[idx] = 1.0;
-        }
+    //         // Mark this sector as "predator detected"
+    //         inputs[idx] = 1.0;
+    //     }
 
-        inputs
-    }
+    //     inputs
+    // }
 
     /// Executes one movement/decision step for the prey.
     ///

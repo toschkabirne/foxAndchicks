@@ -38,6 +38,9 @@ pub const SIGHT_RANGE_PREY: f32 = 100.0;
 pub const NUMBER_SIGHTS_PREY: usize = 24;
 pub const NUMBER_SIGHTS_PREDATOR: usize = 24;
 
+pub const SIGHT_ANGLE_PREY: f32 = 60.0;
+pub const SIGHT_ANGLE_PREDATOR: f32 = 300.0;
+
 pub const PREDATOR_COLOR: Color = RED;
 pub const PREY_COLOR: Color = BLUE;
 
@@ -47,6 +50,8 @@ pub const PREY_COLOR: Color = BLUE;
 
 pub const PREDATOR_RADIUS: f32 = 10.0;
 pub const PREY_RADIUS: f32 = 7.0;
+
+pub const MAX_TURN_ANGLE: f32 = std::f32::consts::FRAC_PI_4;
 
 pub const PRED_TIME_MOVE_DIST_WIDTH: f32 = 15.0;
 
