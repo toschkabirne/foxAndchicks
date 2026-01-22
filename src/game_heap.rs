@@ -18,6 +18,7 @@ pub struct Game {
     max_predators: usize,
     max_preys: usize,
     data_manager: DataManager,
+    scratch_idxs: Vec<usize>,
 }
 
 impl Game {
@@ -44,7 +45,7 @@ impl Game {
     ) -> Self {
         let mut rng = ::rand::thread_rng();
 
-        // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
+        // Spawn initial predators and preys for shared mutability
         let predators: Vec<Predator> = (0..num_preds)
             .map(|_| {
                 Predator::new(
@@ -67,9 +68,9 @@ impl Game {
 
         // Set up spatial hash
         let cell_pred =
-            ((settings::SCREEN_WIDTH as f32) / settings::PREDATOR_SIGHT_RANGE).floor() as i32;
+            ((settings::SCREEN_WIDTH as f32) / settings::SIGHT_RANGE_PREDATOR).floor() as i32;
         let cell_prey =
-            ((settings::SCREEN_WIDTH as f32) / settings::PREY_SIGHT_RANGE).floor() as i32;
+            ((settings::SCREEN_WIDTH as f32) / settings::SIGHT_RANGE_PREY).floor() as i32;
 
         let world_w = settings::SCREEN_WIDTH as f32;
         let world_h = settings::SCREEN_HEIGHT as f32;
@@ -88,6 +89,7 @@ impl Game {
             max_predators: max_preds,
             max_preys: max_preys,
             data_manager,
+            scratch_idxs: Vec::new(),
         }
     }
 
@@ -112,24 +114,28 @@ impl Game {
         // Build PREY hash (preys are still at "start of frame" positions)
         self.spatial_hash_preys.rebuild_from(&self.preys);
 
+        // Pull shared borrows out of `self` for cleaner parallel closures
+        let preys_ref: &Vec<Prey> = &self.preys;
+        let hash_preys: &SpatialHash = &self.spatial_hash_preys;
+
         // PARALLEL: Sense and move predators
         // Each predator independently senses nearby preys and computes its movement
-        self.predators.par_iter_mut().for_each(|pred| {
-            if pred.repro_cooldown > 0 {
-                pred.repro_cooldown -= 1;
-            }
+        self.predators.par_iter_mut().for_each_init(
+            || Vec::<usize>::new(),
+            |scratch, pred| {
+                if pred.repro_cooldown > 0 {
+                    pred.repro_cooldown -= 1;
+                }
 
-            // Sense nearby preys at current predator position
-            let nearby_prey_idxs = self
-                .spatial_hash_preys
-                .query(pred.core.pos.x, pred.core.pos.y);
+                // Sense nearby preys at current predator position
+                hash_preys.query_into(scratch, pred.core.pos.x, pred.core.pos.y);
 
-            // SAFETY: We only read from self.preys here, no mutation
-            let inputs =
-                pred.get_inputs(nearby_prey_idxs.iter().filter_map(|&i| self.preys.get(i)));
+                // SAFETY: We only read from self.preys here, no mutation
+                let inputs = pred.get_inputs(scratch.iter().filter_map(|&i| preys_ref.get(i)));
 
-            pred.move_step(&inputs);
-        });
+                pred.move_step(&inputs);
+            },
+        );
 
         // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
         let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
@@ -138,12 +144,14 @@ impl Game {
 
         for pred in self.predators.iter_mut() {
             // Hunt near new position (preys haven't moved yet)
-            let nearby_prey_idxs = self
-                .spatial_hash_preys
-                .query(pred.core.pos.x, pred.core.pos.y);
+            self.spatial_hash_preys.query_into(
+                &mut self.scratch_idxs,
+                pred.core.pos.x,
+                pred.core.pos.y,
+            );
 
             pred.hunt_nearby(
-                nearby_prey_idxs.iter().filter_map(|&i| self.preys.get(i)),
+                self.scratch_idxs.iter().filter_map(|&i| self.preys.get(i)),
                 &mut eaten_prey_ids,
                 &mut newborn_preds,
                 &mut rng,
@@ -172,24 +180,26 @@ impl Game {
         // Build PREDATOR hash (AFTER predator movement/removal)
         self.spatial_hash_preds.rebuild_from(&self.predators);
 
+        // Pull shared borrows out for parallel closures
+        let preds_ref: &Vec<Predator> = &self.predators;
+        let hash_preds: &SpatialHash = &self.spatial_hash_preds;
+
         // PARALLEL: Sense and move preys
-        self.preys.par_iter_mut().for_each(|prey| {
-            let nearby_pred_idxs = self
-                .spatial_hash_preds
-                .query(prey.core.pos.x, prey.core.pos.y);
+        self.preys.par_iter_mut().for_each_init(
+            || Vec::<usize>::new(),
+            |scratch, prey| {
+                hash_preds.query_into(scratch, prey.core.pos.x, prey.core.pos.y);
 
-            // SAFETY: We only read from self.predators here, no mutation
-            let inputs = prey.sense_predators(
-                nearby_pred_idxs
-                    .iter()
-                    .filter_map(|&i| self.predators.get(i)),
-            );
+                // SAFETY: We only read from self.predators here, no mutation
+                let inputs = prey.sense_predators(scratch.iter().filter_map(|&i| preds_ref.get(i)));
 
-            prey.move_step(&inputs);
-        });
+                prey.move_step(&inputs);
+            },
+        );
 
         // SEQUENTIAL: Reproduction phase (requires RNG and counting newborns)
         let allowed_newborns = self.max_preys.saturating_sub(self.preys.len());
+
         let mut newborn_preys: Vec<Prey> = Vec::new();
 
         for prey in self.preys.iter_mut() {
