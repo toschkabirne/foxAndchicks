@@ -111,7 +111,7 @@ async fn main() {
     predator.core.angle = std::f32::consts::PI;
 
     // Apply user-chosen mutations to prey brain
-    prey.core.brain = NeuralNetwork::new(NUMBER_SIGHTS_PREY, 2, mutations, bias(), &mut rng);
+    prey.core.brain = NeuralNetwork::new(PREY_SIGHT_COUNT, 2, mutations, bias(), &mut rng);
 
     // set_target_fps(FRAMES_PER_SECOND as u32);
 
@@ -133,7 +133,7 @@ async fn main() {
                 &mut rng,
             );
             prey.core.brain =
-                NeuralNetwork::new(NUMBER_SIGHTS_PREY, 2, mutations, bias(), &mut rng);
+                NeuralNetwork::new(PREY_SIGHT_COUNT, 2, mutations, bias(), &mut rng);
         } else {
             // Inputs: prey senses predator without any allocations / Rc / RefCell
             let inputs = prey.sense_predators(std::iter::once(&predator));
@@ -142,8 +142,8 @@ async fn main() {
 
         // Drawing
         clear_background(BLACK);
-        visualization::draw_predator(&predator);
-        visualization::draw_prey(&prey);
+        visualization::draw_predator(predator.core.pos, predator.core.angle, true);
+        visualization::draw_prey(prey.core.pos, prey.core.angle, true);
 
         // Draw neural network overlay
         let nn_ref = &prey.core.brain;

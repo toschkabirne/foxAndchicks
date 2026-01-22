@@ -168,7 +168,7 @@ impl HasPos for Predator {
 impl Predator {
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
         let angle = rng.gen_range(0.0..TWO_PI);
-        let brain = NeuralNetwork::new(NUMBER_SIGHTS_PREDATOR, 2, pred_init_mut(), bias(), rng);
+        let brain = NeuralNetwork::new(PREDATOR_SIGHT_COUNT, 2, pred_init_mut(), bias(), rng);
 
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PRED_ENERGY, brain),
@@ -187,11 +187,13 @@ impl Predator {
     where
         I: IntoIterator<Item = &'a Prey>,
     {
-        let n = NUMBER_SIGHTS_PREDATOR.max(1);
+        let n = PREDATOR_SIGHT_COUNT.max(1);
         let mut inputs = vec![0.0; n];
 
-        let start_angle = normalize_angle(self.core.angle - 30.0_f32.to_radians());
-        let end_angle = normalize_angle(self.core.angle + 30.0_f32.to_radians());
+        let fov_rad = PREDATOR_SIGHT_FOV.to_radians();
+        let half_fov = fov_rad / 2.0;
+        let start_angle = normalize_angle(self.core.angle - half_fov);
+        let end_angle = normalize_angle(self.core.angle + half_fov);
 
         let predator_pos = self.core.pos;
         let world_w = SCREEN_WIDTH as f32;
@@ -203,7 +205,7 @@ impl Predator {
             let delta = wrapped_distance_vector(predator_pos, prey_pos, world_w, world_h);
             let dist = delta.length();
 
-            if dist <= 0.0 || dist >= SIGHT_RANGE_PREDATOR {
+            if dist <= 0.0 || dist >= PREDATOR_SIGHT_RANGE {
                 continue;
             }
 
@@ -350,7 +352,7 @@ impl HasPos for Prey {
 impl Prey {
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
         let angle = rng.gen_range(0.0..TWO_PI);
-        let brain = NeuralNetwork::new(NUMBER_SIGHTS_PREY, 2, prey_init_mut(), bias(), rng);
+        let brain = NeuralNetwork::new(PREY_SIGHT_COUNT, 2, prey_init_mut(), bias(), rng);
 
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PREY_ENERGY, brain),
@@ -368,7 +370,7 @@ impl Prey {
     where
         I: IntoIterator<Item = &'a Predator>,
     {
-        let n = NUMBER_SIGHTS_PREY.max(1);
+        let n = PREY_SIGHT_COUNT.max(1);
         let mut inputs = vec![0.0; n];
 
         let sector_size = TWO_PI / (n as f32);
@@ -382,7 +384,7 @@ impl Prey {
             let delta = wrapped_distance_vector(prey_pos, pred_pos, world_w, world_h);
             let dist = delta.length();
 
-            if dist >= SIGHT_RANGE_PREY {
+            if dist >= PREY_SIGHT_RANGE {
                 continue;
             }
 

@@ -67,9 +67,9 @@ impl Game {
 
         // Set up spatial hash
         let cell_pred =
-            ((settings::SCREEN_WIDTH as f32) / settings::SIGHT_RANGE_PREDATOR).floor() as i32;
+            ((settings::SCREEN_WIDTH as f32) / settings::PREDATOR_SIGHT_RANGE).floor() as i32;
         let cell_prey =
-            ((settings::SCREEN_WIDTH as f32) / settings::SIGHT_RANGE_PREY).floor() as i32;
+            ((settings::SCREEN_WIDTH as f32) / settings::PREY_SIGHT_RANGE).floor() as i32;
 
         let world_w = settings::SCREEN_WIDTH as f32;
         let world_h = settings::SCREEN_HEIGHT as f32;
