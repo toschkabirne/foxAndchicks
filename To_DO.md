@@ -10,6 +10,7 @@ Make sure to quickly mark something if you are working on it. Just put your name
 
 - [x] Create animal class that predator and prey inherit from
 - [x] Is sight possible accross borders? It seems like preys tend to cluster at the borders
+- [ ] in move_step the threashold for speed_factor is an essential logic which might need some nice fine tuning
 
 ## Neural Network
 
@@ -30,4 +31,6 @@ Make sure to quickly mark something if you are working on it. Just put your name
 
 ## General
 
-- [ ] Profiling: Check where the code spends the most time and why
+- [ ] Profiling: Check where the code spends the most time and where
+    - [ ] game_heat_allo vs game to compare if removing heap allocations gives speed up
+    - [ ] 
