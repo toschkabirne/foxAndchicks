@@ -4,12 +4,12 @@
 
 use crate::data_manager::{AnimalType, Frame};
 use crate::brain_neural_network::NeuralNetwork;
-use crate::animals::{Predator, Prey};
-use crate::settings::{self, *};
+use crate::settings::{self};
 use macroquad::prelude::*;
 
 pub const STATS_PANEL_WIDTH: i32 = 200;
 pub const PLAYBACK_CONTROLS_HEIGHT: f32 = 60.0;
+pub const NOSE_LENGTH : f32 = 6.0;
 
 /// Returns the window configuration for macroquad
 pub fn window_conf() -> Conf {
@@ -101,61 +101,14 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize)
 
 /// Draws all animals in the given frame
 pub fn draw_frame(frame: &Frame, draw_sight_lines: bool) {
-    let world_w = settings::SCREEN_WIDTH as f32;
-    let world_h = settings::SCREEN_HEIGHT as f32;
-
     for animal in &frame.animals {
+        let pos = vec2(animal.x, animal.y);
         match animal.animal_type {
             AnimalType::Predator => {
-                // Draw sight lines for predator
-                let start_angle = animal.angle - 30.0_f32.to_radians();
-                let end_angle = animal.angle + 30.0_f32.to_radians();
-
-                if draw_sight_lines {
-                    for i in 0..NUMBER_SIGHTS_PREDATOR {
-                        let t = if NUMBER_SIGHTS_PREDATOR > 1 {
-                            i as f32 / (NUMBER_SIGHTS_PREDATOR as f32 - 1.0)
-                        } else {
-                            0.0
-                        };
-                        let sight_angle = start_angle + t * (end_angle - start_angle);
-
-                        let end_x = animal.x + SIGHT_RANGE_PREDATOR * sight_angle.cos();
-                        let end_y = animal.y + SIGHT_RANGE_PREDATOR * sight_angle.sin();
-
-                        draw_wrapped_line(
-                            vec2(animal.x, animal.y),
-                            vec2(end_x, end_y),
-                            world_w,
-                            world_h,
-                            1.0,
-                            YELLOW,
-                        );
-                    }
-                }
-                draw_circle(animal.x, animal.y, PREDATOR_RADIUS, PREDATOR_COLOR);
+                draw_predator(pos, animal.angle, draw_sight_lines);
             }
             AnimalType::Prey => {
-                // Draw sight lines for prey
-                if draw_sight_lines {
-                    for i in 0..NUMBER_SIGHTS_PREY {
-                        let sight_angle = animal.angle
-                            + (360.0 / NUMBER_SIGHTS_PREY as f32).to_radians() * i as f32;
-
-                        let end_x = animal.x + SIGHT_RANGE_PREY * sight_angle.cos();
-                        let end_y = animal.y + SIGHT_RANGE_PREY * sight_angle.sin();
-
-                        draw_wrapped_line(
-                            vec2(animal.x, animal.y),
-                            vec2(end_x, end_y),
-                            world_w,
-                            world_h,
-                            1.0,
-                            SKYBLUE,
-                        );
-                    }
-                }
-                draw_circle(animal.x, animal.y, PREY_RADIUS, PREY_COLOR);
+                draw_prey(pos, animal.angle, draw_sight_lines);
             }
         }
     }
@@ -381,13 +334,15 @@ pub fn draw_playback_controls(
     }
 }
 
-pub fn draw_predator_sight(predator: &Predator) {
-    let n = settings::NUMBER_SIGHTS_PREDATOR.max(1);
+pub fn draw_predator_sight(pos: Vec2, angle: f32) {
+    let n = settings::PREDATOR_SIGHT_COUNT.max(1);
     let world_w = settings::SCREEN_WIDTH as f32;
     let world_h = settings::SCREEN_HEIGHT as f32;
 
-    let start_angle = predator.core.angle - 30.0_f32.to_radians();
-    let end_angle = predator.core.angle + 30.0_f32.to_radians();
+    let fov_rad = settings::PREDATOR_SIGHT_FOV.to_radians();
+    let half_fov = fov_rad / 2.0;
+    let start_angle = angle - half_fov;
+    let end_angle = angle + half_fov;
 
     for i in 0..n {
         let t = if n > 1 {
@@ -397,11 +352,11 @@ pub fn draw_predator_sight(predator: &Predator) {
         };
         let sight_angle = start_angle + t * (end_angle - start_angle);
 
-        let end_x = predator.core.pos.x + settings::SIGHT_RANGE_PREDATOR * sight_angle.cos();
-        let end_y = predator.core.pos.y + settings::SIGHT_RANGE_PREDATOR * sight_angle.sin();
+        let end_x = pos.x + settings::PREDATOR_SIGHT_RANGE * sight_angle.cos();
+        let end_y = pos.y + settings::PREDATOR_SIGHT_RANGE * sight_angle.sin();
 
         draw_wrapped_line(
-            predator.core.pos,
+            pos,
             vec2(end_x, end_y),
             world_w,
             world_h,
@@ -410,26 +365,35 @@ pub fn draw_predator_sight(predator: &Predator) {
         );
     }
 }
-
-pub fn draw_predator(predator: &Predator) {
-    draw_circle(predator.core.pos.x, predator.core.pos.y, settings::PREDATOR_RADIUS, settings::PREDATOR_COLOR);
-    draw_predator_sight(predator);
+pub fn draw_nose(pos: Vec2, angle: f32, radius: f32, color: Color) {
+    let end_x = pos.x + (NOSE_LENGTH + radius) * angle.cos();
+    let end_y = pos.y + (NOSE_LENGTH + radius) * angle.sin();
+    draw_line(pos.x, pos.y, end_x, end_y, 1.0, color);
 }
 
-pub fn draw_prey_sight(prey: &Prey) {
-    let n = settings::NUMBER_SIGHTS_PREY.max(1);
-    let step = std::f32::consts::PI * 2.0 / (n as f32);
+pub fn draw_predator(pos: Vec2, angle: f32, draw_sight_lines: bool) {
+    draw_circle(pos.x, pos.y, settings::PREDATOR_RADIUS, settings::PREDATOR_COLOR);
+    draw_nose(pos, angle, settings::PREDATOR_RADIUS, settings::PREDATOR_COLOR);
+    if draw_sight_lines {
+        draw_predator_sight(pos, angle);
+    }
+}
+
+pub fn draw_prey_sight(pos: Vec2, angle: f32) {
+    let n = settings::PREY_SIGHT_COUNT.max(1);
+    let fov_rad = settings::PREY_SIGHT_FOV.to_radians();
+    let step = if n > 1 { fov_rad / (n as f32) } else { 0.0 };
     let world_w = settings::SCREEN_WIDTH as f32;
     let world_h = settings::SCREEN_HEIGHT as f32;
 
     for i in 0..n {
-        let sight_angle = prey.core.angle + step * (i as f32);
+        let sight_angle = angle + step * (i as f32);
 
-        let end_x = prey.core.pos.x + settings::SIGHT_RANGE_PREY * sight_angle.cos();
-        let end_y = prey.core.pos.y + settings::SIGHT_RANGE_PREY * sight_angle.sin();
+        let end_x = pos.x + settings::PREY_SIGHT_RANGE * sight_angle.cos();
+        let end_y = pos.y + settings::PREY_SIGHT_RANGE * sight_angle.sin();
 
         draw_wrapped_line(
-            prey.core.pos,
+            pos,
             vec2(end_x, end_y),
             world_w,
             world_h,
@@ -439,9 +403,12 @@ pub fn draw_prey_sight(prey: &Prey) {
     }
 }
 
-pub fn draw_prey(prey: &Prey) {
-    draw_circle(prey.core.pos.x, prey.core.pos.y, settings::PREY_RADIUS, settings::PREY_COLOR);
-    draw_prey_sight(prey);
+pub fn draw_prey(pos: Vec2, angle: f32, draw_sight_lines: bool) {
+    draw_circle(pos.x, pos.y, settings::PREY_RADIUS, settings::PREY_COLOR);
+    draw_nose(pos, angle, settings::PREY_RADIUS, settings::PREY_COLOR);
+    if draw_sight_lines {
+        draw_prey_sight(pos, angle);
+    }
 }
 
 fn rgb(r: u8, g: u8, b: u8) -> Color {

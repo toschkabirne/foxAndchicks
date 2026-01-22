@@ -32,11 +32,14 @@ pub const MAX_PREY_COUNT: usize = 1200;
 // --------------------
 // data_manager.rs settings: #Rendering Engine
 // --------------------
-pub const SIGHT_RANGE_PREDATOR: f32 = 150.0;
-pub const SIGHT_RANGE_PREY: f32 = 100.0;
+pub const PREDATOR_SIGHT_RANGE: f32 = 150.0;
+pub const PREY_SIGHT_RANGE: f32 = 100.0;
 
-pub const NUMBER_SIGHTS_PREY: usize = 24;
-pub const NUMBER_SIGHTS_PREDATOR: usize = 24;
+pub const PREDATOR_SIGHT_FOV: f32 = 60.0;
+pub const PREY_SIGHT_FOV: f32 = 360.0;
+
+pub const PREY_SIGHT_COUNT: usize = 24;
+pub const PREDATOR_SIGHT_COUNT: usize = 24;
 
 pub const PREDATOR_COLOR: Color = RED;
 pub const PREY_COLOR: Color = BLUE;
