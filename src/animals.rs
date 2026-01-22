@@ -1,7 +1,6 @@
 use crate::brain_neural_network::NeuralNetwork;
 use crate::settings::*;
 use crate::spatial_hash::HasPos;
-use crate::visualization::draw_wrapped_line;
 
 use ::rand::Rng;
 use macroquad::prelude::*;
@@ -326,40 +325,6 @@ impl Predator {
         Some(child)
     }
 
-    pub fn draw_sight(&self) {
-        let n = NUMBER_SIGHTS_PREDATOR.max(1);
-        let world_w = SCREEN_WIDTH as f32;
-        let world_h = SCREEN_HEIGHT as f32;
-
-        let start_angle = self.core.angle - 30.0_f32.to_radians();
-        let end_angle = self.core.angle + 30.0_f32.to_radians();
-
-        for i in 0..n {
-            let t = if n > 1 {
-                i as f32 / (n as f32 - 1.0)
-            } else {
-                0.0
-            };
-            let sight_angle = start_angle + t * (end_angle - start_angle);
-
-            let end_x = self.core.pos.x + SIGHT_RANGE_PREDATOR * sight_angle.cos();
-            let end_y = self.core.pos.y + SIGHT_RANGE_PREDATOR * sight_angle.sin();
-
-            draw_wrapped_line(
-                self.core.pos,
-                vec2(end_x, end_y),
-                world_w,
-                world_h,
-                1.0,
-                YELLOW,
-            );
-        }
-    }
-
-    pub fn draw(&self) {
-        draw_circle(self.core.pos.x, self.core.pos.y, PREDATOR_RADIUS, RED);
-        self.draw_sight();
-    }
 }
 
 // -------------------- Prey --------------------
@@ -494,33 +459,6 @@ impl Prey {
         Some(child)
     }
 
-    pub fn draw_sight(&self) {
-        let n = NUMBER_SIGHTS_PREY.max(1);
-        let step = TWO_PI / (n as f32);
-        let world_w = SCREEN_WIDTH as f32;
-        let world_h = SCREEN_HEIGHT as f32;
-
-        for i in 0..n {
-            let sight_angle = self.core.angle + step * (i as f32);
-
-            let end_x = self.core.pos.x + SIGHT_RANGE_PREY * sight_angle.cos();
-            let end_y = self.core.pos.y + SIGHT_RANGE_PREY * sight_angle.sin();
-
-            draw_wrapped_line(
-                self.core.pos,
-                vec2(end_x, end_y),
-                world_w,
-                world_h,
-                1.0,
-                SKYBLUE,
-            );
-        }
-    }
-
-    pub fn draw(&self) {
-        draw_circle(self.core.pos.x, self.core.pos.y, PREY_RADIUS, GREEN);
-        self.draw_sight();
-    }
 }
 
 #[cfg(test)]
