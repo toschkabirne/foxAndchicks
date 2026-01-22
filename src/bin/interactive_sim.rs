@@ -4,7 +4,7 @@ use crate::settings::*;
 use macroquad::prelude::*;
 use std::io::{self, Write};
 
-use predator_vs_prey::animals::{Predator, Prey, wrapped_distance_abs};
+use predator_vs_prey::animals::{wrapped_distance_abs, Predator, Prey};
 use predator_vs_prey::brain_neural_network::NeuralNetwork;
 use predator_vs_prey::visualization::draw_neural_network;
 use predator_vs_prey::*;
@@ -125,18 +125,23 @@ async fn main() {
 
         // "Eaten" check: simple collision (Predator circle intersects Prey circle)
         let eat_r = PREDATOR_RADIUS + PREY_RADIUS;
-        if wrapped_distance_abs(predator.core.pos, prey.core.pos, SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32) < eat_r {
+        if wrapped_distance_abs(
+            predator.core.pos,
+            prey.core.pos,
+            SCREEN_WIDTH as f32,
+            SCREEN_HEIGHT as f32,
+        ) < eat_r
+        {
             println!("Prey eaten! Spawning new prey.");
             prey = Prey::new(
                 (SCREEN_WIDTH / 2) as f32,
                 (SCREEN_HEIGHT / 2) as f32,
                 &mut rng,
             );
-            prey.core.brain =
-                NeuralNetwork::new(PREY_SIGHT_COUNT, 2, mutations, bias(), &mut rng);
+            prey.core.brain = NeuralNetwork::new(PREY_SIGHT_COUNT, 2, mutations, bias(), &mut rng);
         } else {
             // Inputs: prey senses predator without any allocations / Rc / RefCell
-            let inputs = prey.sense_predators(std::iter::once(&predator));
+            let inputs = prey.get_inputs(std::iter::once(&predator));
             prey.move_step(&inputs);
         }
 

@@ -41,8 +41,8 @@ pub const PREY_SIGHT_FOV: f32 = 360.0;
 pub const PREY_SIGHT_COUNT: usize = 24;
 pub const PREDATOR_SIGHT_COUNT: usize = 24;
 
-pub const SIGHT_ANGLE_PREY: f32 = 60.0;
-pub const SIGHT_ANGLE_PREDATOR: f32 = 300.0;
+pub const PREY_SIGHT_ANGLE: f32 = 60.0;
+pub const PREDATOR_SIGHT_ANGLE: f32 = 300.0;
 
 pub const PREDATOR_COLOR: Color = RED;
 pub const PREY_COLOR: Color = BLUE;

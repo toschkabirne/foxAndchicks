@@ -153,34 +153,79 @@ fn angle_lerp(a: f32, b: f32, t: f32) -> f32 {
     normalize_angle(a + d * t)
 }
 
-impl Predator {
-    pub fn get_inputs<'a, I>(&self, preys: I) -> Vec<f32>
-    where
-        I: IntoIterator<Item = &'a Prey>,
-    {
-        AnimalCore::sense_animals(
-            &self.core,
-            preys,
-            NUMBER_SIGHTS_PREDATOR,
-            SIGHT_RANGE_PREDATOR,
-            SIGHT_ANGLE_PREDATOR, // degrees total
-            PREY_RADIUS,
-        )
+// ============================================================================
+// SHARED ANIMAL CORE
+// ============================================================================
+
+/// Core data shared by all animals (Predators and Prey).
+///
+/// This struct contains the fundamental state that every animal in the
+/// simulation needs, regardless of its specific role.
+#[derive(Clone)]
+pub struct AnimalCore {
+    /// Unique identifier for this animal (never reused, even after death)
+    pub id: usize,
+
+    /// Current 2D position in the world
+    pub pos: Vec2,
+
+    /// Current heading angle in radians (0 = facing right/east)
+    pub angle: f32,
+
+    /// Current energy level (animal dies/cannot reproduce when too low)
+    pub energy: f32,
+
+    /// Neural network brain that controls decision-making, each animal owns its brain
+    pub brain: NeuralNetwork,
+}
+pub trait HasCore {
+    fn core(&self) -> &AnimalCore;
+}
+
+impl HasCore for Prey {
+    fn core(&self) -> &AnimalCore {
+        &self.core
     }
 }
-impl Prey {
-    pub fn sense_predators<'a, I>(&self, predators: I) -> Vec<f32>
-    where
-        I: IntoIterator<Item = &'a Predator>,
-    {
-        AnimalCore::sense_animals(
-            &self.core,
-            predators,
-            NUMBER_SIGHTS_PREY,
-            SIGHT_RANGE_PREY,
-            SIGHT_ANGLE_PREY,
-            PREDATOR_RADIUS,
-        )
+
+impl HasCore for Predator {
+    fn core(&self) -> &AnimalCore {
+        &self.core
+    }
+}
+
+impl AnimalCore {
+    /// Creates a new AnimalCore with an existing brain.
+    ///
+    /// This is used during reproduction where the child inherits a mutated
+    /// copy of the parent's brain.
+    pub fn new_with_brain(pos: Vec2, angle: f32, energy: f32, brain: NeuralNetwork) -> Self {
+        Self {
+            id: next_id(),
+            pos,
+            angle,
+            energy,
+            brain,
+        }
+    }
+
+    /// Returns the x-coordinate of the animal's position.
+    #[inline]
+    pub fn x(&self) -> f32 {
+        self.pos.x
+    }
+
+    /// Returns the y-coordinate of the animal's position.
+    #[inline]
+    pub fn y(&self) -> f32 {
+        self.pos.y
+    }
+
+    /// Sets a new position for the animal.
+    /// The spatial hash uses this to update positions after movement.
+    #[inline]
+    pub fn set_xy(&mut self, x: f32, y: f32) {
+        self.pos = vec2(x, y);
     }
 }
 
@@ -264,83 +309,6 @@ impl AnimalCore {
         }
 
         inputs
-    }
-}
-
-pub trait HasCore {
-    fn core(&self) -> &AnimalCore;
-}
-
-impl HasCore for Prey {
-    fn core(&self) -> &AnimalCore {
-        &self.core
-    }
-}
-
-impl HasCore for Predator {
-    fn core(&self) -> &AnimalCore {
-        &self.core
-    }
-}
-
-// ============================================================================
-// SHARED ANIMAL CORE
-// ============================================================================
-
-/// Core data shared by all animals (Predators and Prey).
-///
-/// This struct contains the fundamental state that every animal in the
-/// simulation needs, regardless of its specific role.
-#[derive(Clone)]
-pub struct AnimalCore {
-    /// Unique identifier for this animal (never reused, even after death)
-    pub id: usize,
-
-    /// Current 2D position in the world
-    pub pos: Vec2,
-
-    /// Current heading angle in radians (0 = facing right/east)
-    pub angle: f32,
-
-    /// Current energy level (animal dies/cannot reproduce when too low)
-    pub energy: f32,
-
-    /// Neural network brain that controls decision-making, each animal owns its brain
-    pub brain: NeuralNetwork,
-}
-
-impl AnimalCore {
-    /// Creates a new AnimalCore with an existing brain.
-    ///
-    /// This is used during reproduction where the child inherits a mutated
-    /// copy of the parent's brain.
-    pub fn new_with_brain(pos: Vec2, angle: f32, energy: f32, brain: NeuralNetwork) -> Self {
-        Self {
-            id: next_id(),
-            pos,
-            angle,
-            energy,
-            brain,
-        }
-    }
-
-    /// Returns the x-coordinate of the animal's position.
-    #[inline]
-    pub fn x(&self) -> f32 {
-        self.pos.x
-    }
-
-    /// Returns the y-coordinate of the animal's position.
-    #[inline]
-    pub fn y(&self) -> f32 {
-        self.pos.y
-    }
-
-    /// Sets a new position for the animal.
-    /// The spatial hash uses this to update positions after movement.
-    #[inline]
-    pub fn set_xy(&mut self, x: f32, y: f32) {
-        self.pos = vec2(x, y);
     }
 }
 
@@ -472,7 +440,7 @@ impl Predator {
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
         let angle = rng.gen_range(0.0..TWO_PI);
         // Create brain with predator-specific input count and mutation rate
-        let brain = NeuralNetwork::new(NUMBER_SIGHTS_PREDATOR, 2, pred_init_mut(), bias(), rng);
+        let brain = NeuralNetwork::new(PREDATOR_SIGHT_COUNT, 2, pred_init_mut(), bias(), rng);
 
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PRED_ENERGY, brain),
@@ -795,59 +763,38 @@ impl Predator {
 
         Some(child)
     }
-
-    /// Draws the predator's vision cone for debugging/visualization.
-    ///
-    /// Design rationale: Visualizing vision rays helps us:
-    /// 1. Debug vision system (are rays actually detecting prey?)
-    /// 2. Understand predator behavior (what can they see?)
-    /// 3. Demonstrate the toroidal world (rays wrap across boundaries)
-    ///
-    /// Uses draw_wrapped_line to properly show vision across world edges.
-    pub fn draw_sight(&self) {
-        let n = NUMBER_SIGHTS_PREDATOR.max(1);
-        let world_w = SCREEN_WIDTH as f32;
-        let world_h = SCREEN_HEIGHT as f32;
-
-        // Same vision cone as in get_inputs
-        let start_angle = self.core.angle - 30.0_f32.to_radians();
-        let end_angle = self.core.angle + 30.0_f32.to_radians();
-
-        // Draw each vision ray
-        for i in 0..n {
-            let t = if n > 1 {
-                i as f32 / (n as f32 - 1.0)
-            } else {
-                0.0
-            };
-            let sight_angle = start_angle + t * (end_angle - start_angle);
-
-            // Calculate ray endpoint
-            let end_x = self.core.pos.x + SIGHT_RANGE_PREDATOR * sight_angle.cos();
-            let end_y = self.core.pos.y + SIGHT_RANGE_PREDATOR * sight_angle.sin();
-
-            // Draw with wrapping support
-            draw_wrapped_line(
-                self.core.pos,
-                vec2(end_x, end_y),
-                world_w,
-                world_h,
-                1.0,
-                YELLOW,
-            );
-        }
-    }
-
-    /// Draws the predator as a red circle with vision rays.
-    ///
-    /// Design rationale: Red color clearly distinguishes predators from prey
-    /// (which are green), making population dynamics visible at a glance.
-    pub fn draw(&self) {
-        draw_circle(self.core.pos.x, self.core.pos.y, PREDATOR_RADIUS, RED);
-        self.draw_sight();
-    }
 }
 
+impl Predator {
+    pub fn get_inputs<'a, I>(&self, preys: I) -> Vec<f32>
+    where
+        I: IntoIterator<Item = &'a Prey>,
+    {
+        AnimalCore::sense_animals(
+            &self.core,
+            preys,
+            PREDATOR_SIGHT_COUNT,
+            PREDATOR_SIGHT_RANGE,
+            PREDATOR_SIGHT_ANGLE,
+            PREY_RADIUS,
+        )
+    }
+}
+impl Prey {
+    pub fn get_inputs<'a, I>(&self, predators: I) -> Vec<f32>
+    where
+        I: IntoIterator<Item = &'a Predator>,
+    {
+        AnimalCore::sense_animals(
+            &self.core,
+            predators,
+            PREY_SIGHT_COUNT,
+            PREY_SIGHT_RANGE,
+            PREY_SIGHT_ANGLE,
+            PREDATOR_RADIUS,
+        )
+    }
+}
 // ============================================================================
 // PREY IMPLEMENTATION
 // ============================================================================
@@ -978,7 +925,7 @@ impl Prey {
     ///
     /// # Returns
     /// Vector of floats (0.0 or 1.0) representing each vision sector
-    // pub fn sense_predators<'a, I>(&self, predators: I) -> Vec<f32>
+    // pub fn get_inputs<'a, I>(&self, predators: I) -> Vec<f32>
     // where
     //     I: IntoIterator<Item = &'a Predator>,
     // {
@@ -1063,7 +1010,7 @@ impl Prey {
     ///    These were left as comments to document the design exploration.
     ///
     /// # Arguments
-    /// * `inputs` - Sensory inputs from sense_predators (vision sectors)
+    /// * `inputs` - Sensory inputs from get_inputs (vision sectors)
     pub fn move_step(&mut self, inputs: &[f32]) {
         let energy_ratio = self.core.energy / PREY_ENERGY;
         let outputs = self.core.brain.forward_vectorized(inputs, energy_ratio);
@@ -1193,43 +1140,6 @@ impl Prey {
         child.core.brain = inherited_brain_with_mutations(&self.core.brain, rng);
 
         Some(child)
-    }
-
-    /// Draws the prey's 360° vision rays for debugging/visualization.
-    ///
-    /// Design rationale: Visualizes the omnidirectional vision. Unlike predators
-    /// (cone), prey vision rays form a complete circle around them.
-    pub fn draw_sight(&self) {
-        let n = NUMBER_SIGHTS_PREY.max(1);
-        let step = TWO_PI / (n as f32); // Angular spacing between rays
-        let world_w = SCREEN_WIDTH as f32;
-        let world_h = SCREEN_HEIGHT as f32;
-
-        // Draw each vision ray evenly spaced around the circle
-        for i in 0..n {
-            let sight_angle = self.core.angle + step * (i as f32);
-
-            let end_x = self.core.pos.x + SIGHT_RANGE_PREY * sight_angle.cos();
-            let end_y = self.core.pos.y + SIGHT_RANGE_PREY * sight_angle.sin();
-
-            draw_wrapped_line(
-                self.core.pos,
-                vec2(end_x, end_y),
-                world_w,
-                world_h,
-                1.0,
-                SKYBLUE, // Sky blue distinguishes prey vision from predator vision (yellow)
-            );
-        }
-    }
-
-    /// Draws the prey as a green circle with vision rays.
-    ///
-    /// Design rationale: Green color clearly distinguishes prey from predators
-    /// (red), creating immediate visual feedback on population dynamics.
-    pub fn draw(&self) {
-        draw_circle(self.core.pos.x, self.core.pos.y, PREY_RADIUS, GREEN);
-        self.draw_sight();
     }
 }
 
