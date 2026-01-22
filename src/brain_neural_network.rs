@@ -105,7 +105,7 @@ pub fn act_angle(x: f32) -> f32 {
 /// A growing, evolvable neural network with dynamic topology.
 ///
 /// Architecture:
-/// ```
+/// ```text
 /// Inputs (+ bias) --> Hidden Layer --> Outputs
 ///                         ^   |            
 ///                         |___|  (recurrent connections possible)
