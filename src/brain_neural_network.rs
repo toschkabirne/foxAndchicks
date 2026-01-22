@@ -179,11 +179,11 @@ impl NeuralNetwork {
         self.last_activations = activations.clone();
 
         // 5. Compute final outputs (indices 0 and 1)
-        // output 0
+        // output 0 - speed delta
         let out0_dot = Self::row_dot(&self.hidden_matrix[0], &activations);
         let out0 = act_speed(activations[0] + out0_dot);
 
-        // output 1
+        // output 1 - turn delta
         let out1_dot = Self::row_dot(&self.hidden_matrix[1], &activations);
         let out1 = act_angle(activations[1] + out1_dot);
 

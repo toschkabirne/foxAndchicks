@@ -1,6 +1,7 @@
 use crate::brain_neural_network::NeuralNetwork;
 use crate::settings::*;
 use crate::spatial_hash::HasPos;
+
 use ::rand::Rng;
 use macroquad::prelude::*;
 use std::iter::IntoIterator;
@@ -65,53 +66,6 @@ pub fn normalize_angle(angle: f32) -> f32 {
 fn angle_lerp(a: f32, b: f32, t: f32) -> f32 {
     // Simple linear interpolation, then normalized to [-PI, PI]
     normalize_angle(a + (b - a) * t)
-}
-
-/// Draw a line that wraps around the toroidal world.
-/// If the line crosses a border, it draws the wrapped portion on the opposite side.
-fn draw_wrapped_line(start: Vec2, end: Vec2, width: f32, height: f32, thickness: f32, color: Color) {
-    // Draw the main line (possibly going outside bounds)
-    draw_line(start.x, start.y, end.x, end.y, thickness, color);
-
-    // Check if end point is outside bounds and draw wrapped segments
-    let mut offsets = Vec::new();
-
-    if end.x < 0.0 {
-        offsets.push(vec2(width, 0.0));
-    } else if end.x >= width {
-        offsets.push(vec2(-width, 0.0));
-    }
-
-    if end.y < 0.0 {
-        offsets.push(vec2(0.0, height));
-    } else if end.y >= height {
-        offsets.push(vec2(0.0, -height));
-    }
-
-    // Draw offset copies of the line for wrapping
-    for offset in &offsets {
-        draw_line(
-            start.x + offset.x,
-            start.y + offset.y,
-            end.x + offset.x,
-            end.y + offset.y,
-            thickness,
-            color,
-        );
-    }
-
-    // Handle corner case (both x and y wrap)
-    if offsets.len() == 2 {
-        let corner_offset = offsets[0] + offsets[1];
-        draw_line(
-            start.x + corner_offset.x,
-            start.y + corner_offset.y,
-            end.x + corner_offset.x,
-            end.y + corner_offset.y,
-            thickness,
-            color,
-        );
-    }
 }
 
 // -------------------- Shared Core --------------------
@@ -371,40 +325,6 @@ impl Predator {
         Some(child)
     }
 
-    pub fn draw_sight(&self) {
-        let n = NUMBER_SIGHTS_PREDATOR.max(1);
-        let world_w = SCREEN_WIDTH as f32;
-        let world_h = SCREEN_HEIGHT as f32;
-
-        let start_angle = self.core.angle - 30.0_f32.to_radians();
-        let end_angle = self.core.angle + 30.0_f32.to_radians();
-
-        for i in 0..n {
-            let t = if n > 1 {
-                i as f32 / (n as f32 - 1.0)
-            } else {
-                0.0
-            };
-            let sight_angle = start_angle + t * (end_angle - start_angle);
-
-            let end_x = self.core.pos.x + SIGHT_RANGE_PREDATOR * sight_angle.cos();
-            let end_y = self.core.pos.y + SIGHT_RANGE_PREDATOR * sight_angle.sin();
-
-            draw_wrapped_line(
-                self.core.pos,
-                vec2(end_x, end_y),
-                world_w,
-                world_h,
-                1.0,
-                YELLOW,
-            );
-        }
-    }
-
-    pub fn draw(&self) {
-        draw_circle(self.core.pos.x, self.core.pos.y, PREDATOR_RADIUS, RED);
-        self.draw_sight();
-    }
 }
 
 // -------------------- Prey --------------------
@@ -539,33 +459,6 @@ impl Prey {
         Some(child)
     }
 
-    pub fn draw_sight(&self) {
-        let n = NUMBER_SIGHTS_PREY.max(1);
-        let step = TWO_PI / (n as f32);
-        let world_w = SCREEN_WIDTH as f32;
-        let world_h = SCREEN_HEIGHT as f32;
-
-        for i in 0..n {
-            let sight_angle = self.core.angle + step * (i as f32);
-
-            let end_x = self.core.pos.x + SIGHT_RANGE_PREY * sight_angle.cos();
-            let end_y = self.core.pos.y + SIGHT_RANGE_PREY * sight_angle.sin();
-
-            draw_wrapped_line(
-                self.core.pos,
-                vec2(end_x, end_y),
-                world_w,
-                world_h,
-                1.0,
-                SKYBLUE,
-            );
-        }
-    }
-
-    pub fn draw(&self) {
-        draw_circle(self.core.pos.x, self.core.pos.y, PREY_RADIUS, GREEN);
-        self.draw_sight();
-    }
 }
 
 #[cfg(test)]
