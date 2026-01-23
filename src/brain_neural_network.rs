@@ -30,8 +30,12 @@
 //      maintainable for dynamic topology
 // ============================================================================
 
+use core::num;
+
 use crate::settings;
 use rand::Rng;
+use rand::prelude::*;
+
 
 // ============================================================================
 // ACTIVATION FUNCTIONS
@@ -243,10 +247,52 @@ impl NeuralNetwork {
             last_activations: Vec::new(),
         };
 
-        // Apply initial mutations to create diversity
+        for row in nn.input_matrix.iter_mut() {
+            for val in row.iter_mut() {
+                *val = rng.gen::<f32>() * 0.1;
+            }
+        }
+
+        for row in nn.hidden_matrix.iter_mut() {
+            for val in row.iter_mut() {
+                *val = rng.gen::<f32>() * 0.1;
+            }
+        }
+
         for _ in 0..mutate {
             nn.mutate(rng);
         }
+
+        for _ in 0..20 {
+            nn.add_neuron();
+        }
+
+        let in_bi = num_inputs + 1;
+        let num_outputs = nn.num_outputs;
+        let _total_neurons = nn.neuron_number;
+
+        let hl1 = num_outputs..num_outputs + 10;
+        let hl2 = num_outputs + 10..num_outputs + 20;
+
+
+        for h in hl1.clone() {
+            for i in 0..in_bi {
+                nn.input_matrix[h][i] = rng.gen_range(-0.2..0.2);
+            }
+        }
+
+        for h2 in hl2.clone() {
+            for h1 in hl1.clone() {
+                nn.hidden_matrix[h2][h1] = rng.gen_range(-0.2..0.2);
+            }
+        }
+
+        for o in 0..nn.num_outputs {
+            for h2 in hl2.clone() {
+                nn.hidden_matrix[o][h2] = rng.gen_range(-0.2..0.2);
+            }
+        }
+        nn.eval_order = hl1.chain(hl2).map(|h| h - num_outputs).collect();
 
         nn
     }
