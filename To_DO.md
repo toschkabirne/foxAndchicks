@@ -33,4 +33,5 @@ Make sure to quickly mark something if you are working on it. Just put your name
 
 - [ ] Profiling: Check where the code spends the most time and where
     - [ ] game_heat_allo vs game to compare if removing heap allocations gives speed up
-    - [ ] 
+- [ ] Add a lot of asserts (they verify that the code is correct and Prof. Koch likes them) 
+
