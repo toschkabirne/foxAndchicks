@@ -21,6 +21,7 @@ use rand::Rng;
 // which is essential for neural networks to learn complex behaviors.
 // ============================================================================
 
+const FULLY_CONNECTED: bool = false;
 /// Sigmoid activation with adjustable steepness.
 ///
 /// Design rationale: Sigmoid squashes values to (0, 1) range. The parameters
@@ -139,15 +140,17 @@ impl NeuralNetwork {
             last_activations: Vec::new(),
         };
 
-        for row in nn.input_matrix.iter_mut() {
-            for val in row.iter_mut() {
-                *val = rng.gen::<f32>() * 0.1;
+        if FULLY_CONNECTED {
+            for row in nn.input_matrix.iter_mut() {
+                for val in row.iter_mut() {
+                    *val = rng.gen::<f32>() * 0.1;
+                }
             }
-        }
 
-        for row in nn.hidden_matrix.iter_mut() {
-            for val in row.iter_mut() {
-                *val = rng.gen::<f32>() * 0.1;
+            for row in nn.hidden_matrix.iter_mut() {
+                for val in row.iter_mut() {
+                    *val = rng.gen::<f32>() * 0.1;
+                }
             }
         }
 
@@ -155,36 +158,37 @@ impl NeuralNetwork {
             nn.mutate(rng);
         }
 
-        for _ in 0..20 {
-            nn.add_neuron();
-        }
-
-        let in_bi = num_inputs + 1;
-        let num_outputs = nn.num_outputs;
-        let _total_neurons = nn.neuron_number;
-
-        let hl1 = num_outputs..num_outputs + 10;
-        let hl2 = num_outputs + 10..num_outputs + 20;
-
-        for h in hl1.clone() {
-            for i in 0..in_bi {
-                nn.input_matrix[h][i] = rng.gen_range(-0.2..0.2);
+        if FULLY_CONNECTED {
+            for _ in 0..20 {
+                nn.add_neuron();
             }
-        }
 
-        for h2 in hl2.clone() {
-            for h1 in hl1.clone() {
-                nn.hidden_matrix[h2][h1] = rng.gen_range(-0.2..0.2);
+            let in_bi = num_inputs + 1;
+            let num_outputs = nn.num_outputs;
+            let _total_neurons = nn.neuron_number;
+
+            let hl1 = num_outputs..num_outputs + 10;
+            let hl2 = num_outputs + 10..num_outputs + 20;
+
+            for h in hl1.clone() {
+                for i in 0..in_bi {
+                    nn.input_matrix[h][i] = rng.gen_range(-0.2..0.2);
+                }
             }
-        }
 
-        for o in 0..nn.num_outputs {
             for h2 in hl2.clone() {
-                nn.hidden_matrix[o][h2] = rng.gen_range(-0.2..0.2);
+                for h1 in hl1.clone() {
+                    nn.hidden_matrix[h2][h1] = rng.gen_range(-0.2..0.2);
+                }
             }
-        }
-        nn.eval_order = hl1.chain(hl2).map(|h| h - num_outputs).collect();
 
+            for o in 0..nn.num_outputs {
+                for h2 in hl2.clone() {
+                    nn.hidden_matrix[o][h2] = rng.gen_range(-0.2..0.2);
+                }
+            }
+            nn.eval_order = hl1.chain(hl2).map(|h| h - num_outputs).collect();
+        }
         nn
     }
 
@@ -207,7 +211,7 @@ impl NeuralNetwork {
         self.input_matrix.push(vec![0.0_f32; self.num_inputs + 1]);
 
         // Add new column to all existing rows in hidden matrix
-        // (connections from new neuron to existing hidden/output nodes)
+        // (allows connections from new neuron to existing hidden/output nodes)
         for row in &mut self.hidden_matrix {
             row.push(0.0_f32);
         }
@@ -231,12 +235,6 @@ impl NeuralNetwork {
     /// When modifying matrices, we convert global IDs to matrix indices:
     /// - For input_matrix[target - in_bi][source]: target row, source column
     /// - For hidden_matrix[target - in_bi][source - in_bi]: both adjusted
-    ///
-    /// # Arguments
-    /// * `source_id` - Global ID of source neuron
-    /// * `target_id` - Global ID of target neuron  
-    /// * `weight` - Optional weight value (if None, generates random weight in [-0.2, 0.2])
-    /// * `rng` - Random number generator
     pub fn add_connection<R: Rng>(
         &mut self,
         source_id: usize,
@@ -267,101 +265,131 @@ impl NeuralNetwork {
         }
     }
 
-    pub fn mutate<R: Rng>(&mut self, rng: &mut R) {
+    /// Creates a New Nueron on an existing connection
+    fn create_connected_neuron<R: Rng>(&mut self, rng: &mut R) {
+        let in_bi = self.num_inputs + 1;
+        let mut connections = Vec::new();
+
+        // COLLECT ALL CONNECTIONS
+        // From input matrix
+        for (r, row) in self.input_matrix.iter().enumerate() {
+            for (c, &w) in row.iter().enumerate() {
+                if w != 0.0 {
+                    connections.push((c, in_bi + r, w));
+                }
+            }
+        }
+        // From hidden matrix
+        for (r, row) in self.hidden_matrix.iter().enumerate() {
+            for (c, &w) in row.iter().enumerate() {
+                if w != 0.0 {
+                    connections.push((in_bi + c, in_bi + r, w));
+                }
+            }
+        }
+
+        // CHOOSE RANDOM CONNECTION
+        // Deletes old connection (source -> target), and creates new connection
+        // with new neuron (source -> new -> target)
+        if !connections.is_empty() {
+            let idx = rng.gen_range(0..connections.len());
+            let (source, target, weight) = connections[idx];
+
+            if source < in_bi {
+                self.input_matrix[target - in_bi][source] = 0.0;
+            } else {
+                self.hidden_matrix[target - in_bi][source - in_bi] = 0.0;
+            }
+
+            self.add_neuron();
+            let new_neuron_id = self.neuron_number - 1;
+
+            self.add_connection(source, new_neuron_id, Some(weight), rng);
+            self.add_connection(new_neuron_id, target, Some(weight), rng);
+        }
+    }
+
+    /// Creates a new connection between two existing neurons,
+    /// infinity loop checks if connection is valid, no circles allowed
+    fn create_new_connection<R: Rng>(&mut self, rng: &mut R) {
+        let in_bi = self.num_inputs + 1;
+        let hidden_start = in_bi + self.num_outputs;
+
+        // source can be any input or hidden node (not output)
+        // range: [0, in_bi) U [hidden_start, total)
+        let mut valid_sources: Vec<usize> = (0..in_bi).collect();
+        valid_sources.extend(hidden_start..self.neuron_number);
+
+        let source = valid_sources[rng.gen_range(0..valid_sources.len())];
+        // target can be any hidden or output node
+        // range: [in_bi, total)
+        let target = rng.gen_range(in_bi..self.neuron_number);
+
+        // Check if connection exists
+        let connected = if source < in_bi {
+            self.input_matrix[target - in_bi][source] != 0.0
+        } else {
+            self.hidden_matrix[target - in_bi][source - in_bi] != 0.0
+        };
+
+        if !connected {
+            // Check cycles
+            if !self.infinity_loop(source, target) {
+                self.add_connection(source, target, None, rng);
+            }
+        }
+    }
+
+    /// Changes 4 random weights
+    fn change_weight<R: Rng>(&mut self, rng: &mut R) {
         let in_bi = self.num_inputs + 1;
 
-        // Add Neuron
+        let hidden_start = in_bi + self.num_outputs;
+        let mut valid_sources: Vec<usize> = (0..in_bi).collect();
+        valid_sources.extend(hidden_start..self.neuron_number);
+
+        // TODO: We will change the logic of this function later.
+        // for row in self.input_matrix.iter_mut() {
+        //     for val in row.iter_mut() {
+        //         *val = rng.gen::<f32>() * 0.1;
+        //     }
+        // }
+
+        // for row in self.hidden_matrix.iter_mut() {
+        //     for val in row.iter_mut() {
+        //         *val = rng.gen::<f32>() * 0.1;
+        //     }
+        // }
+
+        for _ in 0..4 {
+            let source = valid_sources[rng.gen_range(0..valid_sources.len())];
+            let target = rng.gen_range(in_bi..self.neuron_number);
+
+            let w_ref = if source < in_bi {
+                &mut self.input_matrix[target - in_bi][source]
+            } else {
+                &mut self.hidden_matrix[target - in_bi][source - in_bi]
+            };
+
+            *w_ref += rng.gen_range(-0.05..0.05);
+            break;
+        }
+    }
+
+    pub fn mutate<R: Rng>(&mut self, rng: &mut R) {
+        // LOGIC ADDS NEURON ON EXISTING CONNECTION
         if rng.gen::<f32>() < settings::add_neuron() {
-            let mut connections = Vec::new();
-
-            // From input matrix
-            for (r, row) in self.input_matrix.iter().enumerate() {
-                for (c, &w) in row.iter().enumerate() {
-                    if w != 0.0 {
-                        connections.push((c, in_bi + r, w));
-                    }
-                }
-            }
-
-            // From hidden matrix
-            for (r, row) in self.hidden_matrix.iter().enumerate() {
-                for (c, &w) in row.iter().enumerate() {
-                    if w != 0.0 {
-                        connections.push((in_bi + c, in_bi + r, w));
-                    }
-                }
-            }
-
-            if !connections.is_empty() {
-                let idx = rng.gen_range(0..connections.len());
-                let (source, target, weight) = connections[idx];
-
-                // Disable old connection
-                if source < in_bi {
-                    self.input_matrix[target - in_bi][source] = 0.0;
-                } else {
-                    self.hidden_matrix[target - in_bi][source - in_bi] = 0.0;
-                }
-
-                self.add_neuron();
-                let new_neuron_id = self.neuron_number - 1;
-
-                // Add Source -> New -> Target
-                self.add_connection(source, new_neuron_id, Some(weight), rng);
-                self.add_connection(new_neuron_id, target, Some(weight), rng);
-            }
+            self.create_connected_neuron(rng);
         }
 
         // Add Weight
         if rng.gen::<f32>() < settings::add_weight() {
-            let hidden_start = in_bi + self.num_outputs;
-
-            // source can be any input or hidden node (not output)
-            // range: [0, in_bi) U [hidden_start, total)
-            let mut valid_sources: Vec<usize> = (0..in_bi).collect();
-            valid_sources.extend(hidden_start..self.neuron_number);
-
-            let source = valid_sources[rng.gen_range(0..valid_sources.len())];
-            // target can be any hidden or output node
-            // range: [in_bi, total)
-            let target = rng.gen_range(in_bi..self.neuron_number);
-
-            // Check if connection exists
-            let connected = if source < in_bi {
-                self.input_matrix[target - in_bi][source] != 0.0
-            } else {
-                self.hidden_matrix[target - in_bi][source - in_bi] != 0.0
-            };
-
-            if !connected {
-                // Check cycles
-                if !self.infinity_loop(source, target) {
-                    self.add_connection(source, target, None, rng);
-                }
-            }
+            self.create_new_connection(rng);
         }
 
         // Change Weight
         if rng.gen::<f32>() < settings::change_weight() {
-            for _ in 0..4 {
-                let hidden_start = in_bi + self.num_outputs;
-                let mut valid_sources: Vec<usize> = (0..in_bi).collect();
-                valid_sources.extend(hidden_start..self.neuron_number);
-
-                let source = valid_sources[rng.gen_range(0..valid_sources.len())];
-                let target = rng.gen_range(in_bi..self.neuron_number);
-
-                let w_ref = if source < in_bi {
-                    &mut self.input_matrix[target - in_bi][source]
-                } else {
-                    &mut self.hidden_matrix[target - in_bi][source - in_bi]
-                };
-
-                if *w_ref != 0.0 {
-                    *w_ref += rng.gen_range(-0.05..0.05);
-                    break;
-                }
-            }
+            self.change_weight(rng);
         }
     }
 

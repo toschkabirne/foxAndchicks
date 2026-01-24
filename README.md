@@ -220,6 +220,9 @@ classDiagram
    - `PREY_REPRODUCATION_RATE`
    - `PREY_REST_ENERGY_GAIN`
 
+## - **neural_network.rs:** 
+# Changes to be done in the neural_network.rs file
+    - `mutate`: let k = rng.gen_range(2..=6); // Number of mutations
 
    - **brain_neural_network.rs:**
    - **settings.rs:**
