@@ -26,8 +26,8 @@ pub struct SimulationSettings {
     // Sight settings
     pub predator_sight_range: Option<f32>,
     pub prey_sight_range: Option<f32>,
-    pub predator_sight_fov: Option<f32>,
-    pub prey_sight_fov: Option<f32>,
+    pub predator_sight_angle: Option<f32>,
+    pub prey_sight_angle: Option<f32>,
     pub prey_sight_count: Option<usize>,
     pub predator_sight_count: Option<usize>,
 
@@ -71,8 +71,8 @@ impl SimulationSettings {
 
             predator_sight_range: Some(settings::PRED_SIGHT_RANGE),
             prey_sight_range: Some(settings::PREY_SIGHT_RANGE),
-            predator_sight_fov: Some(settings::PRED_SIGHT_FOV),
-            prey_sight_fov: Some(settings::PREY_SIGHT_FOV),
+            predator_sight_angle: Some(settings::PRED_SIGHT_ANGLE),
+            prey_sight_angle: Some(settings::PREY_SIGHT_ANGLE),
             prey_sight_count: Some(settings::PREY_SIGHT_COUNT),
             predator_sight_count: Some(settings::PRED_SIGHT_COUNT),
 

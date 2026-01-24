@@ -1,6 +1,5 @@
-use ::rand::thread_rng;
-// use ::rand::Rng;
 use crate::settings::*;
+use ::rand::Rng;
 use macroquad::prelude::*;
 use std::env;
 use std::io::{self, Write};
@@ -21,13 +20,15 @@ fn window_conf() -> Conf {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TestMode {
-    TestPrey,     // default: prey is NN agent, predator is keyboard dummy
-    TestPredator, // predator is NN agent, prey is keyboard dummy
+    /// Default: prey is NN agent, predator is keyboard dummy (you hunt)
+    TestPrey,
+    /// Predator is NN agent, prey is keyboard dummy (you flee/tease)
+    TestPredator,
 }
 
 fn parse_test_mode() -> TestMode {
     // Accept: "test-prey" (default), "test-predator"
-    // Also tolerate "--test-prey" / "--test-predator" because humans love dashes.
+    // Also tolerate "--test-prey" / "--test-predator"
     let mut mode = TestMode::TestPrey;
 
     for arg in env::args().skip(1) {
@@ -71,12 +72,8 @@ fn read_mutations_from_stdin(mode: TestMode) -> usize {
     }
 }
 
-// Controlled predator movement (ersetzt ControlledPredator.move(keys))
+// Controlled predator movement (keyboard)
 fn move_predator_with_keyboard(pred: &mut Predator) {
-    // Left/Right: rotate
-    // Up: move forward
-    // Down: move backward a bit
-    // Shift: faster
     let mut turn = 0.08;
     let mut speed = PRED_SPEED;
 
@@ -92,7 +89,7 @@ fn move_predator_with_keyboard(pred: &mut Predator) {
         pred.core.angle += turn;
     }
 
-    // Energy decay ähnlich Predator.move_step, aber speed_factor “manuell”
+    // energy decay similar-ish to original
     pred.core.energy -= PRED_DEFAULT_DECAY;
 
     let mut speed_factor = 0.0;
@@ -106,19 +103,15 @@ fn move_predator_with_keyboard(pred: &mut Predator) {
         pred.core.pos.x += speed_factor * speed * pred.core.angle.cos();
         pred.core.pos.y += speed_factor * speed * pred.core.angle.sin();
 
-        // wrap_position analog zu animals.rs
         pred.core.pos.x = pred.core.pos.x.rem_euclid(SCREEN_WIDTH as f32);
         pred.core.pos.y = pred.core.pos.y.rem_euclid(SCREEN_HEIGHT as f32);
 
-        // Quadratic-ish movement decay (wie im Original, nur mit manuellem speed_factor)
         pred.core.energy -= (speed_factor * speed_factor) * PRED_MOVING_DECAY;
     }
 }
 
-// Controlled prey movement (dummy, no logic)
+// Controlled prey movement (keyboard dummy)
 fn move_prey_with_keyboard(prey: &mut Prey) {
-    // Same controls as predator for consistency:
-    // Left/Right rotate, Up forward, Down backward, Shift faster
     let mut turn = 0.10;
     let mut speed = PREY_SPEED;
 
@@ -150,13 +143,37 @@ fn move_prey_with_keyboard(prey: &mut Prey) {
     }
 }
 
+/// Respawn prey away from predator so it doesn't instantly collide again.
+/// Works for both dummy-prey and NN-prey.
+fn respawn_prey_away_from_predator<R: Rng>(prey: &mut Prey, predator: &Predator, rng: &mut R) {
+    // Try a few random positions until far enough away
+    let min_dist = 250.0_f32.max(PRED_RADIUS + PREY_RADIUS + 30.0);
+    let world_w = SCREEN_WIDTH as f32;
+    let world_h = SCREEN_HEIGHT as f32;
+
+    for _ in 0..30 {
+        let x = rng.gen_range(0.0..world_w);
+        let y = rng.gen_range(0.0..world_h);
+        let d = wrapped_distance_abs(predator.core.pos, vec2(x, y), world_w, world_h);
+        if d >= min_dist {
+            *prey = Prey::new(x, y, rng);
+            return;
+        }
+    }
+
+    // Fallback: just place it opposite-ish
+    let x = (predator.core.pos.x + world_w * 0.5).rem_euclid(world_w);
+    let y = (predator.core.pos.y + world_h * 0.5).rem_euclid(world_h);
+    *prey = Prey::new(x, y, rng);
+}
+
 #[macroquad::main(window_conf)]
 async fn main() {
     let mode = parse_test_mode();
     println!("Mode: {:?}", mode);
 
     let mutations = read_mutations_from_stdin(mode);
-    let mut rng = thread_rng();
+    let mut rng = ::rand::thread_rng();
 
     let center_x = (SCREEN_WIDTH / 2) as f32;
     let center_y = (SCREEN_HEIGHT / 2) as f32;
@@ -166,22 +183,22 @@ async fn main() {
     // - keyboard dummy goes offset so it doesn't instantly collide
     let (mut prey, mut predator) = match mode {
         TestMode::TestPrey => {
+            // Prey NN in center, predator keyboard offset
             let prey = Prey::new(center_x, center_y, &mut rng);
-            let mut predator = Predator::new(center_x + 200.0, center_y, &mut rng);
-            predator.core.angle = std::f32::consts::PI; // face left towards center
+            let mut predator = Predator::new(center_x + 220.0, center_y, &mut rng);
+            predator.core.angle = std::f32::consts::PI; // face center
             (prey, predator)
         }
         TestMode::TestPredator => {
-            let prey = Prey::new(center_x + 200.0, center_y, &mut rng);
+            // Predator NN in center, prey keyboard offset
+            let prey = Prey::new(center_x + 220.0, center_y, &mut rng);
             let mut predator = Predator::new(center_x, center_y, &mut rng);
-            // angle doesn't matter much, but keep something sane
             predator.core.angle = 0.0;
             (prey, predator)
         }
     };
 
-    // Build NN for the active agent using the correct input size (derived from get_inputs length).
-    // This avoids hardcoding PREY_SIGHT_COUNT vs predator sight constants.
+    // Build NN for the active agent using correct input size (derived from get_inputs length)
     match mode {
         TestMode::TestPrey => {
             let input_len = prey.get_inputs(std::iter::once(&predator)).len();
@@ -198,29 +215,31 @@ async fn main() {
             break;
         }
 
-        // Movement + logic depending on mode
+        // --- Update movement + logic depending on mode ---
         match mode {
             TestMode::TestPrey => {
                 // Predator is keyboard dummy
                 move_predator_with_keyboard(&mut predator);
 
-                // Prey is NN agent (unless it gets eaten and respawns)
+                // Prey is NN agent
+                let inputs = prey.get_inputs(std::iter::once(&predator));
+                prey.move_step(&inputs);
+
+                // If predator catches prey -> respawn prey + rebuild prey brain
                 let eat_r = PRED_RADIUS + PREY_RADIUS;
-                if wrapped_distance_abs(
+                let d = wrapped_distance_abs(
                     predator.core.pos,
                     prey.core.pos,
                     SCREEN_WIDTH as f32,
                     SCREEN_HEIGHT as f32,
-                ) < eat_r
-                {
-                    println!("Prey eaten! Spawning new prey.");
-                    prey = Prey::new(center_x, center_y, &mut rng);
+                );
+
+                if d < eat_r {
+                    println!("Prey eaten! Respawning NN-prey.");
+                    respawn_prey_away_from_predator(&mut prey, &predator, &mut rng);
 
                     let input_len = prey.get_inputs(std::iter::once(&predator)).len();
                     prey.core.brain = NeuralNetwork::new(input_len, 2, mutations, bias(), &mut rng);
-                } else {
-                    let inputs = prey.get_inputs(std::iter::once(&predator));
-                    prey.move_step(&inputs);
                 }
             }
 
@@ -229,25 +248,26 @@ async fn main() {
                 move_prey_with_keyboard(&mut prey);
 
                 // Predator is NN agent
+                let inputs = predator.get_inputs(std::iter::once(&prey));
+                predator.move_step(&inputs);
+
+                // If predator catches prey -> respawn dummy prey (no new brain)
                 let eat_r = PRED_RADIUS + PREY_RADIUS;
-                if wrapped_distance_abs(
+                let d = wrapped_distance_abs(
                     predator.core.pos,
                     prey.core.pos,
                     SCREEN_WIDTH as f32,
                     SCREEN_HEIGHT as f32,
-                ) < eat_r
-                {
-                    println!("Prey eaten! Spawning new prey (dummy).");
-                    // Respawn dummy prey away from center so predator doesn't autospawn-kill it
-                    prey = Prey::new(center_x + 200.0, center_y, &mut rng);
-                }
+                );
 
-                let inputs = predator.get_inputs(std::iter::once(&prey));
-                predator.move_step(&inputs);
+                if d < eat_r {
+                    println!("Prey eaten! Respawning dummy prey.");
+                    respawn_prey_away_from_predator(&mut prey, &predator, &mut rng);
+                }
             }
         }
 
-        // Drawing
+        // --- Drawing ---
         clear_background(BLACK);
         visualization::draw_predator(predator.core.pos, predator.core.angle, true);
         visualization::draw_prey(prey.core.pos, prey.core.angle, true);

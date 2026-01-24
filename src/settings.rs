@@ -35,9 +35,6 @@ pub const MAX_PREY_COUNT: usize = 1200;
 pub const PRED_SIGHT_RANGE: f32 = 150.0;
 pub const PREY_SIGHT_RANGE: f32 = 100.0;
 
-pub const PRED_SIGHT_FOV: f32 = 60.0;
-pub const PREY_SIGHT_FOV: f32 = 360.0;
-
 pub const PREY_SIGHT_COUNT: usize = 24;
 pub const PRED_SIGHT_COUNT: usize = 24;
 

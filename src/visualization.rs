@@ -327,11 +327,41 @@ pub fn draw_playback_controls(state: &mut PlaybackState, total_frames: usize) {
 }
 
 pub fn draw_predator_sight(pos: Vec2, angle: f32) {
-    let n = settings::PRED_SIGHT_COUNT.max(1);
-    let world_w = settings::SCREEN_WIDTH as f32;
-    let world_h = settings::SCREEN_HEIGHT as f32;
+    draw_animal_sight(
+        pos,
+        angle,
+        settings::PRED_SIGHT_COUNT,
+        settings::PRED_SIGHT_RANGE,
+        settings::PRED_SIGHT_ANGLE,
+        settings::SCREEN_WIDTH as f32,
+        settings::SCREEN_HEIGHT as f32,
+    );
+}
 
-    let fov_rad = settings::PRED_SIGHT_FOV.to_radians();
+pub fn draw_prey_sight(pos: Vec2, angle: f32) {
+    draw_animal_sight(
+        pos,
+        angle,
+        settings::PREY_SIGHT_COUNT,
+        settings::PREY_SIGHT_RANGE,
+        settings::PREY_SIGHT_ANGLE,
+        settings::SCREEN_WIDTH as f32,
+        settings::SCREEN_HEIGHT as f32,
+    );
+}
+
+fn draw_animal_sight(
+    pos: Vec2,
+    angle: f32,
+    sight_count: usize,
+    sight_range: f32,
+    sight_angle_deg: f32,
+    world_w: f32,
+    world_h: f32,
+) {
+    let n = sight_count.max(1);
+
+    let fov_rad = sight_angle_deg.to_radians();
     let half_fov = fov_rad / 2.0;
     let start_angle = angle - half_fov;
     let end_angle = angle + half_fov;
@@ -342,14 +372,16 @@ pub fn draw_predator_sight(pos: Vec2, angle: f32) {
         } else {
             0.0
         };
+
         let sight_angle = start_angle + t * (end_angle - start_angle);
 
-        let end_x = pos.x + settings::PRED_SIGHT_RANGE * sight_angle.cos();
-        let end_y = pos.y + settings::PRED_SIGHT_RANGE * sight_angle.sin();
+        let end_x = pos.x + sight_range * sight_angle.cos();
+        let end_y = pos.y + sight_range * sight_angle.sin();
 
         draw_wrapped_line(pos, vec2(end_x, end_y), world_w, world_h, 1.0, YELLOW);
     }
 }
+
 pub fn draw_nose(pos: Vec2, angle: f32, radius: f32, color: Color) {
     let end_x = pos.x + (NOSE_LENGTH + radius) * angle.cos();
     let end_y = pos.y + (NOSE_LENGTH + radius) * angle.sin();
@@ -361,23 +393,6 @@ pub fn draw_predator(pos: Vec2, angle: f32, draw_sight_lines: bool) {
     draw_nose(pos, angle, settings::PRED_RADIUS, settings::PRED_COLOR);
     if draw_sight_lines {
         draw_predator_sight(pos, angle);
-    }
-}
-
-pub fn draw_prey_sight(pos: Vec2, angle: f32) {
-    let n = settings::PREY_SIGHT_COUNT.max(1);
-    let fov_rad = settings::PREY_SIGHT_FOV.to_radians();
-    let step = if n > 1 { fov_rad / (n as f32) } else { 0.0 };
-    let world_w = settings::SCREEN_WIDTH as f32;
-    let world_h = settings::SCREEN_HEIGHT as f32;
-
-    for i in 0..n {
-        let sight_angle = angle + step * (i as f32);
-
-        let end_x = pos.x + settings::PREY_SIGHT_RANGE * sight_angle.cos();
-        let end_y = pos.y + settings::PREY_SIGHT_RANGE * sight_angle.sin();
-
-        draw_wrapped_line(pos, vec2(end_x, end_y), world_w, world_h, 1.0, SKYBLUE);
     }
 }
 
@@ -431,6 +446,7 @@ pub fn draw_neural_network(nn: &NeuralNetwork, x: f32, y: f32, width: f32, heigh
     );
 
     let in_bi = num_inputs + 1;
+    let hidden_start = in_bi + num_outputs;
 
     // Outputs (right)
     for i in 0..num_outputs {
@@ -501,7 +517,8 @@ pub fn draw_neural_network(nn: &NeuralNetwork, x: f32, y: f32, width: f32, heigh
                 continue;
             }
 
-            let source_id = in_bi + c;
+            // hidden_matrix columns are hidden-only sources (no outputs as sources)
+            let source_id = hidden_start + c;
             let target_id = in_bi + r;
 
             let source_val = get_activation(source_id);
