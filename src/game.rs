@@ -1,5 +1,5 @@
-use crate::animals::{Predator, Prey};
-use crate::data_manager::{DataManager, Frame, IndexedFrameReader};
+use crate::animals::{wrapped_distance_abs, Predator, Prey};
+use crate::data_manager::{AnimalType, DataManager, Frame, IndexedFrameReader};
 use crate::settings::{self};
 use crate::spatial_hash::SpatialHash;
 use crate::visualization::{draw_frame, draw_game_stats, draw_playback_controls, PlaybackState};
@@ -31,6 +31,58 @@ impl Game {
     /// Returns the actual filename (with timestamp) used for storing data, if any
     pub fn get_data_filename(&self) -> Option<&str> {
         self.data_manager.as_ref().map(|dm| dm.filename.as_str())
+    }
+
+    /// Finds the animal closest to the given position (x, y) within a small radius.
+    /// Returns Some((AnimalType, id)) if found, None otherwise.
+    pub fn get_closest_animal_at(&self, x: f32, y: f32) -> Option<(AnimalType, usize)> {
+        let click_pos = Vec2::new(x, y);
+        let selection_radius = 40.0; // Reasonable click radius
+        let world_w = settings::SCREEN_WIDTH as f32;
+        let world_h = settings::SCREEN_HEIGHT as f32;
+
+        let mut closest_d = selection_radius;
+        let mut found = None;
+
+        // Check predators
+        for pred in &self.predators {
+            let dist = wrapped_distance_abs(click_pos, pred.core.pos, world_w, world_h);
+            if dist < closest_d {
+                closest_d = dist;
+                found = Some((AnimalType::Predator, pred.core.id));
+            }
+        }
+
+        // Check prey (if closer than any predator found so far)
+        for prey in &self.preys {
+            let dist = wrapped_distance_abs(click_pos, prey.core.pos, world_w, world_h);
+            if dist < closest_d {
+                closest_d = dist;
+                found = Some((AnimalType::Prey, prey.core.id));
+            }
+        }
+
+        found
+    }
+
+    /// Retrieves the brain of the specified animal.
+    pub fn get_animal_brain(
+        &self,
+        animal_type: AnimalType,
+        id: usize,
+    ) -> Option<&crate::brain_neural_network::NeuralNetwork> {
+        match animal_type {
+            AnimalType::Predator => self
+                .predators
+                .iter()
+                .find(|p| p.core.id == id)
+                .map(|p| &p.core.brain),
+            AnimalType::Prey => self
+                .preys
+                .iter()
+                .find(|p| p.core.id == id)
+                .map(|p| &p.core.brain),
+        }
     }
 }
 
