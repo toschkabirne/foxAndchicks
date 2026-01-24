@@ -223,6 +223,12 @@ classDiagram
 ## - **neural_network.rs:** 
 # Changes to be done in the neural_network.rs file
     - `mutate`: let k = rng.gen_range(2..=6); // Number of mutations
-
+    - let mut w = weight.unwrap_or_else(|| rng.gen_range(-0.2..0.2)); // initial weight 
+    - `FULLY_CONNECTED` // set to true for fully connected networks
+# Changes to be done in the settings.rs file
+    - `MUT_CHANGE_STEP`: Mutation step size
+    - `add_neuron()`
+    - `add_weight()`
+    - `change_weight()`
    - **brain_neural_network.rs:**
    - **settings.rs:**

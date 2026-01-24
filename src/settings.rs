@@ -96,6 +96,8 @@ pub const PREY_REST_ENERGY_GAIN: f32 = PREY_ENERGY / (4.0 * (FRAMES_PER_SECOND a
 // --------------------
 // Mutations parameter
 // --------------------
+pub const MUT_CHANGE_STEP: f32 = 0.05;
+
 static PREY_INIT_MUT: RwLock<usize> = RwLock::new(40);
 pub fn prey_init_mut() -> usize {
     *PREY_INIT_MUT.read().unwrap()

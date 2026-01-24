@@ -8,10 +8,7 @@
 // - Modify existing connection weights
 // ============================================================================
 
-use core::num;
-
-use crate::settings;
-use rand::prelude::*;
+use crate::settings::*;
 use rand::Rng;
 
 // ============================================================================
@@ -133,7 +130,7 @@ impl NeuralNetwork {
 
             // Hidden matrix: square matrix for outputs (no hidden neurons yet)
             // Initialized to zero (no connections)
-            hidden_matrix: vec![vec![0.0; num_outputs]; num_outputs],
+            hidden_matrix: vec![Vec::new(); num_outputs],
 
             // Debug/visualization fields
             last_inputs: Vec::new(),
@@ -141,15 +138,26 @@ impl NeuralNetwork {
         };
 
         if FULLY_CONNECTED {
+            for _ in 0..20 {
+                nn.add_neuron();
+            }
             for row in nn.input_matrix.iter_mut() {
                 for val in row.iter_mut() {
-                    *val = rng.gen::<f32>() * 0.1;
+                    let mut w = rng.gen::<f32>() * 0.1;
+                    if w == 0.0 {
+                        w = 0.01;
+                    }
+                    *val = w;
                 }
             }
 
             for row in nn.hidden_matrix.iter_mut() {
                 for val in row.iter_mut() {
-                    *val = rng.gen::<f32>() * 0.1;
+                    let mut w = rng.gen::<f32>() * 0.1;
+                    if w == 0.0 {
+                        w = 0.01;
+                    }
+                    *val = w;
                 }
             }
         }
@@ -159,10 +167,6 @@ impl NeuralNetwork {
         }
 
         if FULLY_CONNECTED {
-            for _ in 0..20 {
-                nn.add_neuron();
-            }
-
             let in_bi = num_inputs + 1;
             let num_outputs = nn.num_outputs;
             let _total_neurons = nn.neuron_number;
@@ -172,19 +176,34 @@ impl NeuralNetwork {
 
             for h in hl1.clone() {
                 for i in 0..in_bi {
-                    nn.input_matrix[h][i] = rng.gen_range(-0.2..0.2);
+                    let mut w = rng.gen_range(-0.2..0.2);
+                    if w == 0.0 {
+                        w = 0.01;
+                    }
+                    nn.input_matrix[h][i] = w;
                 }
             }
 
             for h2 in hl2.clone() {
                 for h1 in hl1.clone() {
-                    nn.hidden_matrix[h2][h1] = rng.gen_range(-0.2..0.2);
+                    // hidden_matrix columns are hidden-only, indexed by (activation_idx - num_outputs)
+                    let col = h1 - num_outputs;
+                    let mut w = rng.gen_range(-0.2..0.2);
+                    if w == 0.0 {
+                        w = 0.01;
+                    }
+                    nn.hidden_matrix[h2][col] = w;
                 }
             }
 
             for o in 0..nn.num_outputs {
                 for h2 in hl2.clone() {
-                    nn.hidden_matrix[o][h2] = rng.gen_range(-0.2..0.2);
+                    let col = h2 - num_outputs;
+                    let mut w = rng.gen_range(-0.2..0.2);
+                    if w == 0.0 {
+                        w = 0.01;
+                    }
+                    nn.hidden_matrix[o][col] = w;
                 }
             }
             nn.eval_order = hl1.chain(hl2).map(|h| h - num_outputs).collect();
@@ -192,20 +211,72 @@ impl NeuralNetwork {
         nn
     }
 
-    /// Adds a new hidden neuron to the network.
-    ///
-    /// This grows both matrices to accommodate the new neuron:
-    /// - Adds a row to input_matrix (new neuron can receive from inputs)
-    /// - Adds a row and column to hidden_matrix (new neuron can connect to/from
-    ///   other hidden/output nodes)
-    ///
-    /// Design rationale: New neurons start with all-zero connections. Subsequent
-    /// mutations will add actual connections with non-zero weights. This prevents
-    /// the new neuron from immediately affecting network behavior, allowing
-    /// gradual integration.
-    ///
-    /// The new neuron is added during "add neuron" mutation, which typically
-    /// splits an existing connection: A -> B becomes A -> new -> B.
+    /// Handles Mutation Logic of the Neural Network
+    pub fn mutate<R: Rng>(&mut self, rng: &mut R) {
+        // LOGIC ADDS NEURON ON EXISTING CONNECTION
+        if rng.gen::<f32>() < add_neuron() {
+            self.create_connected_neuron(rng);
+        }
+
+        // Add Weight
+        if rng.gen::<f32>() < add_weight() {
+            self.create_new_connection(rng);
+        }
+
+        // Change Weight
+        if rng.gen::<f32>() < change_weight() {
+            self.change_weight(rng);
+        }
+    }
+
+    /// Handles Forward Pass of the Neural Network
+    pub fn forward_vectorized(&mut self, inputs: &[f32], energy_factor: f32) -> [f32; 2] {
+        // 1. Prepare input activations
+        // We can reuse a pre-allocated vector if we want, but let's just make a new one for safety first
+        let mut in_act = Vec::with_capacity(self.num_inputs + 1);
+        in_act.extend_from_slice(inputs);
+        in_act.push(self.bias * energy_factor);
+
+        // 2. Initial activations for (outputs + hidden) from input_matrix
+        let total_neurons_idx = self.neuron_number - (self.num_inputs + 1); // = outputs + hidden count
+        let mut activations = vec![0.0; total_neurons_idx];
+
+        for (i, row) in self.input_matrix.iter().enumerate() {
+            activations[i] = Self::row_dot(row, &in_act);
+        }
+
+        // 3. Hidden evaluation in topological order
+        // eval_order contains indices into 'activations' list (which corresponds to hidden/output nodes)
+        let hidden_act_start = self.num_outputs;
+        for &order in &self.eval_order {
+            // order is index in activations
+            // hidden_matrix columns are hidden-only sources
+            let dot = Self::row_dot(&self.hidden_matrix[order], &activations[hidden_act_start..]);
+            activations[order] = act_func(activations[order] + dot);
+        }
+
+        // 4. Store for debug
+        self.last_inputs = in_act;
+        self.last_activations = activations.clone();
+
+        // 5. Compute final outputs (indices 0 and 1)
+        // output 0 - speed delta
+        let out0_dot = Self::row_dot(&self.hidden_matrix[0], &activations[self.num_outputs..]);
+        let out0 = act_speed(activations[0] + out0_dot);
+
+        // output 1 - turn delta
+        let out1_dot = Self::row_dot(&self.hidden_matrix[1], &activations[self.num_outputs..]);
+        let out1 = act_angle(activations[1] + out1_dot);
+
+        [out0, out1]
+    }
+
+    /// Helper function: computes dot product of a weight row with an activation vector.
+    fn row_dot(row: &[f32], vec: &[f32]) -> f32 {
+        row.iter().zip(vec.iter()).map(|(w, v)| w * v).sum()
+    }
+
+    /// Adds a new hidden unconnected neuron to the network.
     pub fn add_neuron(&mut self) {
         // Add new row to input matrix (connections from inputs/bias to new neuron)
         self.input_matrix.push(vec![0.0_f32; self.num_inputs + 1]);
@@ -216,25 +287,16 @@ impl NeuralNetwork {
             row.push(0.0_f32);
         }
 
-        // Add new row to hidden matrix (connections to new neuron)
-        let new_width = self.hidden_matrix.len() + 1;
+        // Add new row to hidden matrix (connections TO new neuron)
+        // Width = hidden_count AFTER the column push above.
+        let new_width = self.hidden_matrix[0].len();
         self.hidden_matrix.push(vec![0.0_f32; new_width]);
 
         // Update total neuron count
         self.neuron_number += 1;
     }
 
-    /// Adds or modifies a connection weight between two neurons.
-    ///
-    /// Design rationale for node indexing:
-    /// The function uses the global node ID scheme:
-    /// - source_id < in_bi: Source is an input or bias node
-    /// - source_id >= in_bi: Source is an output or hidden node
-    /// - target_id is always >= in_bi (outputs/hidden only)
-    ///
-    /// When modifying matrices, we convert global IDs to matrix indices:
-    /// - For input_matrix[target - in_bi][source]: target row, source column
-    /// - For hidden_matrix[target - in_bi][source - in_bi]: both adjusted
+    /// Adds a new connection to the network.
     pub fn add_connection<R: Rng>(
         &mut self,
         source_id: usize,
@@ -243,9 +305,14 @@ impl NeuralNetwork {
         rng: &mut R,
     ) {
         // Use provided weight or generate small random weight
-        let w = weight.unwrap_or_else(|| rng.gen_range(-0.2..0.2));
+        let mut w = weight.unwrap_or_else(|| rng.gen_range(-0.2..0.2));
+
+        if w == 0.0 {
+            w = 0.01;
+        }
 
         let in_bi = self.num_inputs + 1; // First output/hidden node ID
+        let hidden_start = in_bi + self.num_outputs; // First hidden node ID
 
         // Determine which matrix to update based on source type
         if source_id < in_bi {
@@ -256,18 +323,29 @@ impl NeuralNetwork {
                 }
             }
         } else {
-            // Source is output/hidden -> update hidden_matrix
+            // Source is output/hidden -> hidden_matrix stores ONLY hidden sources.
+            // Outputs are not representable here, so ignore output-as-source.
+            if source_id < hidden_start {
+                return;
+            }
             if let Some(row) = self.hidden_matrix.get_mut(target_id - in_bi) {
-                if let Some(val) = row.get_mut(source_id - in_bi) {
+                let col = source_id - hidden_start;
+                if let Some(val) = row.get_mut(col) {
                     *val = w;
                 }
             }
         }
     }
 
+    ///  ----------------------------------------------------
+    /// HELPER FUNCTIONS - Mutation
+    ///  ----------------------------------------------------
+
     /// Creates a New Nueron on an existing connection
     fn create_connected_neuron<R: Rng>(&mut self, rng: &mut R) {
         let in_bi = self.num_inputs + 1;
+        let hidden_start = in_bi + self.num_outputs;
+
         let mut connections = Vec::new();
 
         // COLLECT ALL CONNECTIONS
@@ -283,7 +361,8 @@ impl NeuralNetwork {
         for (r, row) in self.hidden_matrix.iter().enumerate() {
             for (c, &w) in row.iter().enumerate() {
                 if w != 0.0 {
-                    connections.push((in_bi + c, in_bi + r, w));
+                    // c indexes hidden sources only
+                    connections.push((hidden_start + c, in_bi + r, w));
                 }
             }
         }
@@ -298,7 +377,9 @@ impl NeuralNetwork {
             if source < in_bi {
                 self.input_matrix[target - in_bi][source] = 0.0;
             } else {
-                self.hidden_matrix[target - in_bi][source - in_bi] = 0.0;
+                // source is guaranteed hidden here (comes from connections list)
+                let col = source - hidden_start;
+                self.hidden_matrix[target - in_bi][col] = 0.0;
             }
 
             self.add_neuron();
@@ -329,7 +410,8 @@ impl NeuralNetwork {
         let connected = if source < in_bi {
             self.input_matrix[target - in_bi][source] != 0.0
         } else {
-            self.hidden_matrix[target - in_bi][source - in_bi] != 0.0
+            // source is hidden => map to hidden_matrix column
+            self.hidden_matrix[target - in_bi][source - hidden_start] != 0.0
         };
 
         if !connected {
@@ -345,110 +427,56 @@ impl NeuralNetwork {
         let in_bi = self.num_inputs + 1;
 
         let hidden_start = in_bi + self.num_outputs;
-        let mut valid_sources: Vec<usize> = (0..in_bi).collect();
-        valid_sources.extend(hidden_start..self.neuron_number);
+        let mut connections: Vec<(usize, usize)> = Vec::new();
 
-        // TODO: We will change the logic of this function later.
-        // for row in self.input_matrix.iter_mut() {
-        //     for val in row.iter_mut() {
-        //         *val = rng.gen::<f32>() * 0.1;
-        //     }
-        // }
+        // Scan input_matrix: input/bias -> output/hidden
+        for (r, row) in self.input_matrix.iter().enumerate() {
+            for (c, &w) in row.iter().enumerate() {
+                if w != 0.0 {
+                    let source = c;
+                    let target = in_bi + r;
+                    connections.push((source, target));
+                }
+            }
+        }
 
-        // for row in self.hidden_matrix.iter_mut() {
-        //     for val in row.iter_mut() {
-        //         *val = rng.gen::<f32>() * 0.1;
-        //     }
-        // }
+        // Scan hidden_matrix: hidden -> output/hidden
+        for (r, row) in self.hidden_matrix.iter().enumerate() {
+            for (c, &w) in row.iter().enumerate() {
+                if w != 0.0 {
+                    let source = hidden_start + c;
+                    let target = in_bi + r;
+                    connections.push((source, target));
+                }
+            }
+        }
+        if connections.is_empty() {
+            return;
+        }
 
-        for _ in 0..4 {
-            let source = valid_sources[rng.gen_range(0..valid_sources.len())];
-            let target = rng.gen_range(in_bi..self.neuron_number);
+        let (source, target) = connections[rng.gen_range(0..connections.len())];
+        let w_ref = if source < in_bi {
+            &mut self.input_matrix[target - in_bi][source]
+        } else {
+            &mut self.hidden_matrix[target - in_bi][source - hidden_start]
+        };
+        *w_ref += rng.gen_range(-MUT_CHANGE_STEP..MUT_CHANGE_STEP);
 
-            let w_ref = if source < in_bi {
-                &mut self.input_matrix[target - in_bi][source]
-            } else {
-                &mut self.hidden_matrix[target - in_bi][source - in_bi]
-            };
-
-            *w_ref += rng.gen_range(-0.05..0.05);
-            break;
+        // Enforce non-zero weight
+        if *w_ref == 0.0 {
+            *w_ref = 0.01;
         }
     }
 
-    pub fn mutate<R: Rng>(&mut self, rng: &mut R) {
-        // LOGIC ADDS NEURON ON EXISTING CONNECTION
-        if rng.gen::<f32>() < settings::add_neuron() {
-            self.create_connected_neuron(rng);
-        }
-
-        // Add Weight
-        if rng.gen::<f32>() < settings::add_weight() {
-            self.create_new_connection(rng);
-        }
-
-        // Change Weight
-        if rng.gen::<f32>() < settings::change_weight() {
-            self.change_weight(rng);
-        }
-    }
-
-    /// Helper function: computes dot product of a weight row with an activation vector.
-    ///
-    /// Design rationale: This is the core operation in neural network forward pass:
-    /// output = sum(weight[i] * activation[i] for all i)
-    ///
-    /// Using a separate function:
-    /// 1. Improves readability (forward_vectorized is complex enough)
-    /// 2. Could be optimized separately (e.g., SIMD) in the future
-    /// 3. Clearly shows this is standard linear algebra
-    fn row_dot(row: &[f32], vec: &[f32]) -> f32 {
-        row.iter().zip(vec.iter()).map(|(w, v)| w * v).sum()
-    }
-
-    pub fn forward_vectorized(&mut self, inputs: &[f32], energy_factor: f32) -> [f32; 2] {
-        // 1. Prepare input activations
-        // We can reuse a pre-allocated vector if we want, but let's just make a new one for safety first
-        let mut in_act = Vec::with_capacity(self.num_inputs + 1);
-        in_act.extend_from_slice(inputs);
-        in_act.push(self.bias * energy_factor);
-
-        // 2. Initial activations for (outputs + hidden) from input_matrix
-        let total_neurons_idx = self.neuron_number - (self.num_inputs + 1); // = outputs + hidden count
-        let mut activations = vec![0.0; total_neurons_idx];
-
-        for (i, row) in self.input_matrix.iter().enumerate() {
-            activations[i] = Self::row_dot(row, &in_act);
-        }
-
-        // 3. Hidden evaluation in topological order
-        // eval_order contains indices into 'activations' list (which corresponds to hidden/output nodes)
-        for &order in &self.eval_order {
-            // order is index in activations
-            let dot = Self::row_dot(&self.hidden_matrix[order], &activations);
-            activations[order] = act_func(activations[order] + dot);
-        }
-
-        // 4. Store for debug
-        self.last_inputs = in_act;
-        self.last_activations = activations.clone();
-
-        // 5. Compute final outputs (indices 0 and 1)
-        // output 0 - speed delta
-        let out0_dot = Self::row_dot(&self.hidden_matrix[0], &activations);
-        let out0 = act_speed(activations[0] + out0_dot);
-
-        // output 1 - turn delta
-        let out1_dot = Self::row_dot(&self.hidden_matrix[1], &activations);
-        let out1 = act_angle(activations[1] + out1_dot);
-
-        [out0, out1]
-    }
+    ///  ----------------------------------------------------
+    /// HELPER FUNCTIONS - CHECKS FOR CYLES
+    ///  ----------------------------------------------------
 
     // Preserving original algorithm logic for cycle detection as requested
     pub fn infinity_loop(&mut self, source: usize, target: usize) -> bool {
         let in_bi = self.num_inputs + 1;
         let in_bi_out = in_bi + self.num_outputs;
+        let hidden_start = in_bi_out;
 
         // only if BOTH are hidden ids (because inputs->hidden or hidden->output can't form simple cycles in this feedforward-ish structure unless back connections exist)
         // logic from Python: check if adding edge source->target creates cycle
@@ -456,7 +484,7 @@ impl NeuralNetwork {
             let ot_hi = self.neuron_number - in_bi; // outputs + hidden count
 
             // dummy insert
-            self.hidden_matrix[target - in_bi][source - in_bi] = 1.0;
+            self.hidden_matrix[target - in_bi][source - hidden_start] = 1.0;
 
             let mut sample_order: Vec<usize> = Vec::new();
             let mut index_list: Vec<usize> = (self.num_outputs..ot_hi).collect(); // hidden indices only
@@ -484,9 +512,10 @@ impl NeuralNetwork {
                     // ie. is there any node in 'index_list' that has a connection to 'i'?
                     // The logic here seems to checking if `i` has NO incoming connections from the *remaining* pool.
 
-                    let no_incoming = index_list
-                        .iter()
-                        .all(|&col| self.hidden_matrix[i][col] == 0.0);
+                    let no_incoming = index_list.iter().all(|&col| {
+                        // col is activation index; convert to hidden_matrix column index
+                        self.hidden_matrix[i][col - self.num_outputs] == 0.0
+                    });
 
                     if no_incoming {
                         index_list.remove(j);
@@ -498,7 +527,7 @@ impl NeuralNetwork {
 
                 if before == index_list.len() {
                     // cycle detected -> revert dummy
-                    self.hidden_matrix[target - in_bi][source - in_bi] = 0.0;
+                    self.hidden_matrix[target - in_bi][source - hidden_start] = 0.0;
                     return true;
                 }
             }
