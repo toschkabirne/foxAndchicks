@@ -132,7 +132,6 @@ async fn main() {
             SCREEN_HEIGHT as f32,
         ) < eat_r
         {
-            println!("Prey eaten! Spawning new prey.");
             prey = Prey::new(
                 (SCREEN_WIDTH / 2) as f32,
                 (SCREEN_HEIGHT / 2) as f32,
