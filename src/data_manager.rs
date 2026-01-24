@@ -3,9 +3,9 @@ use crate::settings;
 use bincode;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::time::SystemTime;
 use std::io::{BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::path::Path;
+use std::time::SystemTime;
 
 /// Snapshot of all simulation settings at the time of recording.
 /// This captures both const and runtime-mutable settings.
@@ -69,18 +69,18 @@ impl SimulationSettings {
             max_pred_count: Some(settings::MAX_PRED_COUNT),
             max_prey_count: Some(settings::MAX_PREY_COUNT),
 
-            predator_sight_range: Some(settings::PREDATOR_SIGHT_RANGE),
+            predator_sight_range: Some(settings::PRED_SIGHT_RANGE),
             prey_sight_range: Some(settings::PREY_SIGHT_RANGE),
-            predator_sight_fov: Some(settings::PREDATOR_SIGHT_FOV),
+            predator_sight_fov: Some(settings::PRED_SIGHT_FOV),
             prey_sight_fov: Some(settings::PREY_SIGHT_FOV),
             prey_sight_count: Some(settings::PREY_SIGHT_COUNT),
-            predator_sight_count: Some(settings::PREDATOR_SIGHT_COUNT),
+            predator_sight_count: Some(settings::PRED_SIGHT_COUNT),
 
-            predator_radius: Some(settings::PREDATOR_RADIUS),
-            predator_speed: Some(settings::PREDATOR_SPEED),
+            predator_radius: Some(settings::PRED_RADIUS),
+            predator_speed: Some(settings::PRED_SPEED),
             pred_energy: Some(settings::PRED_ENERGY),
-            predator_energy_gain: Some(settings::PREDATOR_ENERGY_GAIN),
-            predator_lifespan: Some(settings::PREDATOR_LIFESPAN),
+            predator_energy_gain: Some(settings::PRED_ENERGY_GAIN),
+            predator_lifespan: Some(settings::PRED_LIFESPAN),
             pred_default_decay: Some(settings::PRED_DEFAULT_DECAY),
             pred_moving_decay: Some(settings::PRED_MOVING_DECAY),
 
@@ -132,10 +132,10 @@ impl DataManager {
         // Store settings in a separate JSON file for compatibility
         let settings = SimulationSettings::capture();
         let settings_filename = Self::settings_filename(&filename);
-        let settings_json = serde_json::to_string_pretty(&settings)
-            .expect("Failed to serialize settings to JSON");
-        let mut settings_file = File::create(&settings_filename)
-            .expect("Unable to create settings file");
+        let settings_json =
+            serde_json::to_string_pretty(&settings).expect("Failed to serialize settings to JSON");
+        let mut settings_file =
+            File::create(&settings_filename).expect("Unable to create settings file");
         settings_file
             .write_all(settings_json.as_bytes())
             .expect("Failed to write settings file");
@@ -150,7 +150,7 @@ impl DataManager {
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        
+
         let path = Path::new(base);
         if path.is_absolute() {
             let parent = path.parent().unwrap_or(Path::new(""));
@@ -162,11 +162,11 @@ impl DataManager {
                 .and_then(|s| s.to_str())
                 .unwrap_or(base)
                 .trim_end_matches(".bin");
-            
+
             // Ensure simulations directory exists
             let simulations_dir = "simulations";
             fs::create_dir_all(simulations_dir).expect("Failed to create simulations directory");
-            
+
             format!("{}/{}_{}.bin", simulations_dir, base_name, timestamp)
         }
     }
@@ -238,7 +238,7 @@ impl IndexedFrameReader {
 
         loop {
             let offset = reader.stream_position()?;
-            
+
             // Try to deserialize a frame to find its size
             let result: Result<Frame, _> = bincode::deserialize_from(&mut reader);
             match result {
@@ -329,8 +329,16 @@ impl Frame {
 
     /// Returns the count of predators and preys in this frame
     pub fn counts(&self) -> (usize, usize) {
-        let pred_count = self.animals.iter().filter(|a| a.animal_type == AnimalType::Predator).count();
-        let prey_count = self.animals.iter().filter(|a| a.animal_type == AnimalType::Prey).count();
+        let pred_count = self
+            .animals
+            .iter()
+            .filter(|a| a.animal_type == AnimalType::Predator)
+            .count();
+        let prey_count = self
+            .animals
+            .iter()
+            .filter(|a| a.animal_type == AnimalType::Prey)
+            .count();
         (pred_count, prey_count)
     }
 }
@@ -410,7 +418,10 @@ mod tests {
         let (settings, mut frame_reader) = DataManager::read_file(&actual_filename);
         assert_eq!(settings.screen_width, Some(crate::settings::SCREEN_WIDTH));
         assert_eq!(settings.screen_height, Some(crate::settings::SCREEN_HEIGHT));
-        assert_eq!(settings.predator_sight_range, Some(crate::settings::PREDATOR_SIGHT_RANGE));
+        assert_eq!(
+            settings.predator_sight_range,
+            Some(crate::settings::PRED_SIGHT_RANGE)
+        );
 
         let read_frame = frame_reader.next().expect("Should have one frame");
         assert_eq!(read_frame.tick, 0);
@@ -437,9 +448,18 @@ mod tests {
 
         let settings = DataManager::read_settings(&actual_filename);
         assert_eq!(settings.screen_width, Some(crate::settings::SCREEN_WIDTH));
-        assert_eq!(settings.frames_per_second, Some(crate::settings::FRAMES_PER_SECOND));
-        assert_eq!(settings.pred_init_numb, Some(crate::settings::PRED_INIT_NUMB));
-        assert_eq!(settings.prey_init_numb, Some(crate::settings::PREY_INIT_NUMB));
+        assert_eq!(
+            settings.frames_per_second,
+            Some(crate::settings::FRAMES_PER_SECOND)
+        );
+        assert_eq!(
+            settings.pred_init_numb,
+            Some(crate::settings::PRED_INIT_NUMB)
+        );
+        assert_eq!(
+            settings.prey_init_numb,
+            Some(crate::settings::PREY_INIT_NUMB)
+        );
 
         // Cleanup
         let _ = std::fs::remove_file(&actual_filename);
