@@ -6,28 +6,6 @@
 // - Add new hidden neurons during mutation
 // - Add new connections between neurons
 // - Modify existing connection weights
-//
-// Design rationale:
-// Both predators and prey use neural networks to make movement decisions based
-// on sensory inputs. The network topology can grow and change through evolution,
-// allowing complex behaviors to emerge over many generations.
-//
-// Key design decisions:
-// 1. **Direct ownership**: Each animal owns its brain (no Rc<RefCell<>>)
-//    - Simpler, more idiomatic Rust
-//    - Better performance (no runtime borrow checking)
-//    - Clearer ownership semantics
-//
-// 2. **Growing topology**: Networks start small and can add neurons/connections
-//    - Allows evolution of complexity
-//    - Mimics biological neural development
-//    - Successful strategies naturally emerge through selection
-//
-// 3. **Matrix representation**: Uses Vec<Vec<f32>> for flexibility
-//    - Easy to add rows/columns during mutation
-//    - Clear separation between input->hidden and hidden->hidden connections
-//    - Trade-off: slightly less cache-friendly than flat arrays, but more
-//      maintainable for dynamic topology
 // ============================================================================
 
 use crate::settings;
@@ -43,10 +21,7 @@ use rand::Rng;
 /// Sigmoid activation with adjustable steepness.
 ///
 /// Design rationale: Sigmoid squashes values to (0, 1) range. The parameters
-/// (a = 1.5, b = 0.0) control steepness and offset. This particular configuration
-/// provides a moderately steep sigmoid that responds well to typical input ranges.
-///
-/// Formula: 1 / (1 + e^(-x * 1.5 - 0.0))
+/// (a = 1.5, b = 0.0) control steepness and offset.
 pub fn sigmoid(x: f32) -> f32 {
     let a = 1.5;
     let b = 0.0;
@@ -54,20 +29,13 @@ pub fn sigmoid(x: f32) -> f32 {
 }
 
 /// ReLU (Rectified Linear Unit) activation.
-///
-/// Design rationale: ReLU is simple but effective - outputs either the input
-/// (if positive) or 0 (if negative). This prevents "vanishing gradient" issues
-/// and is computationally cheap. Used in hidden layers in some configurations.
 pub fn re_ac(x: f32) -> f32 {
     x.max(0.0)
 }
 
 /// Hyperbolic tangent activation (general purpose).
 ///
-/// Design rationale: tanh squashes to (-1, 1) range, allowing both positive
-/// and negative activations. This is used for general hidden neuron activations.
-/// The symmetric range around 0 helps with learning directional decisions
-/// (e.g., turn left vs. right).
+/// Design rationale: tanh squashes to (-1, 1) range
 pub fn act_func(x: f32) -> f32 {
     x.tanh()
 }
@@ -75,25 +43,15 @@ pub fn act_func(x: f32) -> f32 {
 /// Specialized activation for speed output.
 ///
 /// Design rationale: Speed must be in [0, 1] range (can't move backward).
-/// We use sigmoid(x - 1.5) which biases toward lower outputs by default.
-/// This creates evolutionary pressure to "earn" high speed through network
-/// weights, rather than having high speed as the default.
-///
-/// The shift by -1.5 means:
 /// - Input 0 produces sigmoid(-1.5) ≈ 0.18 (slow movement)
 /// - Input needs to be > 1.5 to get significant speed
-/// - Prevents animals from always moving at maximum speed
 pub fn act_speed(x: f32) -> f32 {
     sigmoid(x - 1.5)
 }
 
 /// Specialized activation for angle/turning output.
 ///
-/// Design rationale: Turning should be symmetric (can turn left or right
-/// equally). tanh's range of (-1, 1) is perfect for this:
-/// - Negative values: turn left
-/// - Positive values: turn right
-/// - Magnitude: how sharp the turn
+/// Turning symmetric, tanh's range of (-1, 1) (can turn left or right equally).
 pub fn act_angle(x: f32) -> f32 {
     x.tanh()
 }
@@ -103,22 +61,6 @@ pub fn act_angle(x: f32) -> f32 {
 // ============================================================================
 
 /// A growing, evolvable neural network with dynamic topology.
-///
-/// Architecture:
-/// ```text
-/// Inputs (+ bias) --> Hidden Layer --> Outputs
-///                         ^   |            
-///                         |___|  (recurrent connections possible)
-/// ```
-///
-/// Node indexing scheme:
-/// - [0 .. num_inputs): Input nodes
-/// - [num_inputs]: Bias node
-/// - [num_inputs+1 .. num_inputs+1+num_outputs): Output nodes
-/// - [num_inputs+1+num_outputs .. neuron_number): Hidden nodes
-///
-/// Design rationale: This indexing allows us to refer to any node by a single
-/// integer ID, simplifying mutation logic (adding connections, checking cycles).
 #[derive(Clone, Debug)]
 pub struct NeuralNetwork {
     /// Number of input nodes (sensory inputs from environment)
@@ -128,40 +70,20 @@ pub struct NeuralNetwork {
     pub num_outputs: usize,
 
     /// Bias value multiplied by energy_factor during forward pass.
-    ///
-    /// Design rationale: The bias allows the network to have non-zero activation
-    /// even with zero inputs. Multiplying by energy_factor gives the network
-    /// awareness of the animal's current energy state.
     pub bias: f32,
 
     /// Total number of nodes: inputs + bias + outputs + hidden nodes.
-    ///
-    /// Design rationale: This increases as hidden neurons are added through mutation.
-    /// It's used for indexing calculations and determining valid source/target nodes
-    /// for new connections.
     pub neuron_number: usize,
 
     /// Topological ordering of hidden nodes for evaluation.
-    ///
-    /// Design rationale: Contains indices (relative to activations vector) of hidden
-    /// nodes in dependency order. Nodes with no dependencies come first. This allows
-    /// us to evaluate the network in one forward pass without needing to iterate
-    /// until convergence.
-    ///
-    /// Example: If hidden node A feeds into hidden node B, A appears before B in
-    /// this list. This prevents using B's value before A has been computed.
-    ///
     /// Updated by infinity_loop() when new connections are added.
     pub eval_order: Vec<usize>,
 
     /// Connection weights from inputs (+ bias) to outputs/hidden nodes.
     ///
-    /// Shape: [outputs + hidden count] x [inputs + 1]
+    /// Shape: [outputs + hidden count] x [inputs + BIAS]
     /// Row i represents connections TO node (num_inputs + 1 + i)
     /// Column j represents connection FROM input/bias node j
-    ///
-    /// Design rationale: Width is constant (inputs don't grow), so each row has
-    /// the same size. Rows are added when hidden neurons are added.
     pub input_matrix: Vec<Vec<f32>>,
 
     /// Connection weights between output/hidden nodes.
@@ -169,26 +91,12 @@ pub struct NeuralNetwork {
     /// Shape: [outputs + hidden count] x [outputs + hidden count]
     /// Row i represents connections TO output/hidden node i
     /// Column j represents connection FROM output/hidden node j
-    ///
-    /// Design rationale: This allows recurrent connections (hidden nodes can
-    /// feed back into themselves or other hidden nodes). Both rows and columns
-    /// grow as hidden neurons are added.
-    ///
-    /// Using Vec<Vec<f32>> (not flattened) because we frequently add rows/columns
-    /// during mutation. The performance trade-off is acceptable for the
-    /// maintainability gain.
     pub hidden_matrix: Vec<Vec<f32>>,
 
     /// Stores the most recent input vector (for debugging/visualization).
-    ///
-    /// Design rationale: Allows external code to inspect what the network "saw"
-    /// in its last forward pass. Useful for debugging and data collection.
     pub last_inputs: Vec<f32>,
 
     /// Stores the most recent activation vector (for debugging/visualization).
-    ///
-    /// Design rationale: Allows inspection of internal network state. Helps
-    /// understand what features the hidden neurons are detecting.
     pub last_activations: Vec<f32>,
 }
 
@@ -197,22 +105,7 @@ impl NeuralNetwork {
     ///
     /// Initial structure: just inputs, bias, and outputs (no hidden neurons).
     /// Hidden neurons are added later through mutation.
-    ///
-    /// Design rationale:
-    /// 1. **Start simple**: New animals get minimal brains. Complexity emerges
-    ///    through evolution, not by design.
-    /// 2. **Initial mutations**: The `mutate` parameter determines how many
-    ///    random mutations to apply to the fresh network. This creates initial
-    ///    diversity in the population.
-    /// 3. **Zero-initialized matrices**: All connections start at 0 weight.
-    ///    Mutations will add non-zero connections.
-    ///
-    /// # Arguments
-    /// * `num_inputs` - Number of sensory inputs (predator/prey vision rays)
-    /// * `num_outputs` - Number of outputs (always 2: speed, angle)
-    /// * `mutate` - How many initial mutations to apply
-    /// * `bias` - Bias value for the bias node
-    /// * `rng` - Random number generator
+
     pub fn new<R: Rng>(
         num_inputs: usize,
         num_outputs: usize,
@@ -247,7 +140,6 @@ impl NeuralNetwork {
         for _ in 0..mutate {
             nn.mutate(rng);
         }
-
         nn
     }
 
@@ -276,7 +168,6 @@ impl NeuralNetwork {
         }
 
         // Add new row to hidden matrix (connections to new neuron)
-        // Width = old width + 1 (we just added a column)
         let new_width = self.hidden_matrix.len() + 1;
         self.hidden_matrix.push(vec![0.0_f32; new_width]);
 
@@ -329,58 +220,6 @@ impl NeuralNetwork {
                 }
             }
         }
-    }
-
-    /// Helper function: computes dot product of a weight row with an activation vector.
-    ///
-    /// Design rationale: This is the core operation in neural network forward pass:
-    /// output = sum(weight[i] * activation[i] for all i)
-    ///
-    /// Using a separate function:
-    /// 1. Improves readability (forward_vectorized is complex enough)
-    /// 2. Could be optimized separately (e.g., SIMD) in the future
-    /// 3. Clearly shows this is standard linear algebra
-    fn row_dot(row: &[f32], vec: &[f32]) -> f32 {
-        row.iter().zip(vec.iter()).map(|(w, v)| w * v).sum()
-    }
-
-    pub fn forward_vectorized(&mut self, inputs: &[f32], energy_factor: f32) -> [f32; 2] {
-        // 1. Prepare input activations
-        // We can reuse a pre-allocated vector if we want, but let's just make a new one for safety first
-        let mut in_act = Vec::with_capacity(self.num_inputs + 1);
-        in_act.extend_from_slice(inputs);
-        in_act.push(self.bias * energy_factor);
-
-        // 2. Initial activations for (outputs + hidden) from input_matrix
-        let total_neurons_idx = self.neuron_number - (self.num_inputs + 1); // = outputs + hidden count
-        let mut activations = vec![0.0; total_neurons_idx];
-
-        for (i, row) in self.input_matrix.iter().enumerate() {
-            activations[i] = Self::row_dot(row, &in_act);
-        }
-
-        // 3. Hidden evaluation in topological order
-        // eval_order contains indices into 'activations' list (which corresponds to hidden/output nodes)
-        for &order in &self.eval_order {
-            // order is index in activations
-            let dot = Self::row_dot(&self.hidden_matrix[order], &activations);
-            activations[order] = act_func(activations[order] + dot);
-        }
-
-        // 4. Store for debug
-        self.last_inputs = in_act;
-        self.last_activations = activations.clone();
-
-        // 5. Compute final outputs (indices 0 and 1)
-        // output 0 - speed delta
-        let out0_dot = Self::row_dot(&self.hidden_matrix[0], &activations);
-        let out0 = act_speed(activations[0] + out0_dot);
-
-        // output 1 - turn delta
-        let out1_dot = Self::row_dot(&self.hidden_matrix[1], &activations);
-        let out1 = act_angle(activations[1] + out1_dot);
-
-        [out0, out1]
     }
 
     pub fn mutate<R: Rng>(&mut self, rng: &mut R) {
@@ -479,6 +318,58 @@ impl NeuralNetwork {
                 }
             }
         }
+    }
+
+    /// Helper function: computes dot product of a weight row with an activation vector.
+    ///
+    /// Design rationale: This is the core operation in neural network forward pass:
+    /// output = sum(weight[i] * activation[i] for all i)
+    ///
+    /// Using a separate function:
+    /// 1. Improves readability (forward_vectorized is complex enough)
+    /// 2. Could be optimized separately (e.g., SIMD) in the future
+    /// 3. Clearly shows this is standard linear algebra
+    fn row_dot(row: &[f32], vec: &[f32]) -> f32 {
+        row.iter().zip(vec.iter()).map(|(w, v)| w * v).sum()
+    }
+
+    pub fn forward_vectorized(&mut self, inputs: &[f32], energy_factor: f32) -> [f32; 2] {
+        // 1. Prepare input activations
+        // We can reuse a pre-allocated vector if we want, but let's just make a new one for safety first
+        let mut in_act = Vec::with_capacity(self.num_inputs + 1);
+        in_act.extend_from_slice(inputs);
+        in_act.push(self.bias * energy_factor);
+
+        // 2. Initial activations for (outputs + hidden) from input_matrix
+        let total_neurons_idx = self.neuron_number - (self.num_inputs + 1); // = outputs + hidden count
+        let mut activations = vec![0.0; total_neurons_idx];
+
+        for (i, row) in self.input_matrix.iter().enumerate() {
+            activations[i] = Self::row_dot(row, &in_act);
+        }
+
+        // 3. Hidden evaluation in topological order
+        // eval_order contains indices into 'activations' list (which corresponds to hidden/output nodes)
+        for &order in &self.eval_order {
+            // order is index in activations
+            let dot = Self::row_dot(&self.hidden_matrix[order], &activations);
+            activations[order] = act_func(activations[order] + dot);
+        }
+
+        // 4. Store for debug
+        self.last_inputs = in_act;
+        self.last_activations = activations.clone();
+
+        // 5. Compute final outputs (indices 0 and 1)
+        // output 0 - speed delta
+        let out0_dot = Self::row_dot(&self.hidden_matrix[0], &activations);
+        let out0 = act_speed(activations[0] + out0_dot);
+
+        // output 1 - turn delta
+        let out1_dot = Self::row_dot(&self.hidden_matrix[1], &activations);
+        let out1 = act_angle(activations[1] + out1_dot);
+
+        [out0, out1]
     }
 
     // Preserving original algorithm logic for cycle detection as requested

@@ -6,6 +6,8 @@ pub trait HasPos {
     fn set_pos(&mut self, x: f32, y: f32);
 }
 
+/// Design rationale: The spatial hash accelerates "find nearby entities" queries
+/// from O(n) to O(1) average case. This is critical for performance when checking:
 #[derive(Clone)]
 pub struct SpatialHash {
     pub cell_size: i32,

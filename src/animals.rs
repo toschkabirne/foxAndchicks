@@ -1,7 +1,6 @@
 // ============================================================================
-// IMPORTS AND DEPENDENCIES
+// Dependencies
 // ============================================================================
-
 use crate::brain_neural_network::NeuralNetwork;
 use crate::settings::*;
 use crate::spatial_hash::HasPos;
@@ -18,28 +17,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 // GLOBAL STATE AND CONSTANTS
 // ============================================================================
 
-/// Global counter for assigning unique IDs to animals.
-///
-/// Design rationale: We use `AtomicUsize` to ensure thread-safe ID generation
-/// even though the current game loop is single-threaded. This prevents subtle
-/// bugs if we later add multi-threading (e.g., for parallel simulation steps).
-/// The atomic operations have negligible overhead compared to the benefit of
-/// future-proofing the codebase.
-static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
+/// Global counter for assigning unique IDs to animals, needed for tracking during hunting, reproduction, and data collection
+static NEXT_ID: AtomicUsize = AtomicUsize::new(1); // thread-safe ID generation
 
 /// Pre-calculated constant for 2π (full circle in radians).
 const TWO_PI: f32 = 2.0 * PI;
 
-// ============================================================================
-// HELPER FUNCTIONS - ID GENERATION
-// ============================================================================
-
-/// Generates a unique ID for each animal.
-///
-/// Design rationale: Using a centralized ID generator ensures each animal
-/// (predator or prey) has a unique identifier for tracking during hunting,
-/// reproduction, and data collection. We use `Ordering::Relaxed` because
-/// we only need atomicity, not ordering guarantees (single-threaded context).
+// helper function to generate unique IDs for animals
 #[inline]
 fn next_id() -> usize {
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
@@ -48,7 +32,6 @@ fn next_id() -> usize {
 // ============================================================================
 // HELPER FUNCTIONS - TOROIDAL WORLD GEOMETRY
 // ============================================================================
-// Design rationale for toroidal world:
 // We implement a "wrap-around" world where entities crossing one edge appear
 // on the opposite edge. This eliminates edge effects where animals could get
 // "stuck" in corners, creating a more uniform simulation environment. This
@@ -57,31 +40,12 @@ fn next_id() -> usize {
 // ============================================================================
 
 /// Wraps a position to stay within world boundaries (toroidal topology).
-///
-/// Takes a position that may be outside [0, width) × [0, height) and maps it
-/// back into bounds using modular arithmetic.
-///
-/// Design rationale: We use `rem_euclid` instead of the `%` operator because
-/// it handles negative numbers correctly
-
 #[inline]
 pub fn wrap_position(pos: Vec2, width: f32, height: f32) -> Vec2 {
     vec2(pos.x.rem_euclid(width), pos.y.rem_euclid(height))
 }
 
 /// Computes the shortest vector from point `a` to point `b` in a toroidal world.
-///
-/// In a toroidal world, there are multiple paths between any two points. For
-/// example, going left or going right (wrapping around). This function always
-/// returns the shortest path.
-///
-/// Design rationale: This is crucial for:
-/// 1. Predator vision: A predator near the right edge should "see" prey on
-///    the left edge as being nearby, not far away.
-/// 2. Hunting logic: Predators should chase prey via the shortest path.
-/// 3. Angle calculations: Animals should turn toward the nearest instance of
-///    their target, accounting for world wrapping.
-
 #[inline]
 pub fn wrapped_distance_vector(a: Vec2, b: Vec2, width: f32, height: f32) -> Vec2 {
     let mut dx = b.x - a.x;
@@ -94,7 +58,6 @@ pub fn wrapped_distance_vector(a: Vec2, b: Vec2, width: f32, height: f32) -> Vec
     } else if dx < -width / 2.0 {
         dx += width; // Wrap right
     }
-
     // Same logic for vertical distance
     if dy > height / 2.0 {
         dy -= height; // Wrap up
@@ -106,26 +69,12 @@ pub fn wrapped_distance_vector(a: Vec2, b: Vec2, width: f32, height: f32) -> Vec
 }
 
 /// Computes the shortest Euclidean distance between two points in a toroidal world.
-///
-/// This is simply the length of the shortest vector from `a` to `b`.
-///
-/// Design rationale: Used for collision detection (predator eating prey) and
-/// range checks (is something within vision range?). By using the wrapped
-/// distance, animals can interact across world boundaries naturally.
 #[inline]
 pub fn wrapped_distance_abs(a: Vec2, b: Vec2, width: f32, height: f32) -> f32 {
     wrapped_distance_vector(a, b, width, height).length()
 }
 
-// ============================================================================
-// HELPER FUNCTIONS - ANGLE MANIPULATION
-// ============================================================================
-
 /// Normalizes an angle to the range [-π, π].
-/// We use [-π, π] instead of [0, 2π] because it makes angular differences
-/// easier to interpret: a difference of 0.1 means "turn slightly right",
-/// regardless of absolute heading.
-
 #[inline]
 pub fn normalize_angle(angle: f32) -> f32 {
     (angle + PI).rem_euclid(TWO_PI) - PI
@@ -143,19 +92,16 @@ pub fn normalize_angle(angle: f32) -> f32 {
 pub struct AnimalCore {
     /// Unique identifier for this animal (never reused, even after death)
     pub id: usize,
-
     /// Current 2D position in the world
     pub pos: Vec2,
-
     /// Current heading angle in radians (0 = facing right/east)
     pub angle: f32,
-
     /// Current energy level (animal dies/cannot reproduce when too low)
     pub energy: f32,
-
     /// Neural network brain that controls decision-making, each animal owns its brain
     pub brain: NeuralNetwork,
 }
+
 pub trait HasCore {
     fn core(&self) -> &AnimalCore;
 }
@@ -173,10 +119,7 @@ impl HasCore for Predator {
 }
 
 impl AnimalCore {
-    /// Creates a new AnimalCore with an existing brain.
-    ///
-    /// This is used during reproduction where the child inherits a mutated
-    /// copy of the parent's brain.
+    /// Creates a new AnimalCore with a new brain
     pub fn new_with_brain(pos: Vec2, angle: f32, energy: f32, brain: NeuralNetwork) -> Self {
         Self {
             id: next_id(),
@@ -187,20 +130,16 @@ impl AnimalCore {
         }
     }
 
-    /// Returns the x-coordinate of the animal's position.
     #[inline]
     pub fn x(&self) -> f32 {
         self.pos.x
     }
 
-    /// Returns the y-coordinate of the animal's position.
     #[inline]
     pub fn y(&self) -> f32 {
         self.pos.y
     }
 
-    /// Sets a new position for the animal.
-    /// The spatial hash uses this to update positions after movement.
     #[inline]
     pub fn set_xy(&mut self, x: f32, y: f32) {
         self.pos = vec2(x, y);
@@ -212,28 +151,6 @@ impl AnimalCore {
 /// Animals have forward-facing "cone vision" covering ±30° from their heading.
 /// The cone is divided into NUMBER_SIGHTS rays, each acting as a
 /// boolean "prey detector" (1.0 if prey detected, 0.0 otherwise).
-///
-/// Design rationale:
-/// 1. **Limited field of view (60° total)**: Animals must turn to see around
-///    them, creating more realistic hunting behavior. Prey behind a predator
-///    are safe (for now).
-///
-/// 2. **Angular width calculation**: We don't just check if prey is on a ray.
-///    Instead, we calculate the angular size of the prey "disc" at that distance
-///    and check if it overlaps with the ray. This simulates realistic vision:
-///    - Close prey are easier to see (larger angular size)
-///    - Distant prey are harder to detect (smaller angular size)
-///    - Creates smooth activation as prey move relative to vision rays
-///
-/// 3. **Range limit (SIGHT_RANGE_PREDATOR)**: Predators can't see infinitely
-///    far, creating strategic depth (must get close enough to see prey).
-///
-/// 4. **Toroidal distance**: Uses wrapped_distance_vector so predators can
-///    see prey across world boundaries.
-///
-/// 5. **Early activation**: Once a ray detects prey (inputs[i] = 1.0), we
-///    skip checking more prey for that ray (optimization + "this ray is blocked").
-///
 impl AnimalCore {
     pub fn sense_animals<'a, I, T>(
         core: &AnimalCore,
@@ -301,12 +218,6 @@ impl AnimalCore {
 }
 
 /// Creates a child brain from a parent brain with random mutations.
-///
-/// Design rationale: This is the core of the evolutionary mechanism.
-/// When an animal reproduces, its child inherits the parent's brain structure
-/// and weights, but with small random changes (mutations). Over generations,
-/// beneficial mutations lead to better survival and more offspring.
-
 #[inline]
 fn inherited_brain_with_mutations<R: Rng>(parent: &NeuralNetwork, rng: &mut R) -> NeuralNetwork {
     let mut brain = parent.clone();
@@ -319,35 +230,16 @@ fn inherited_brain_with_mutations<R: Rng>(parent: &NeuralNetwork, rng: &mut R) -
 
 /// Performs a movement step for an animal, updating position, angle, and energy.
 /// This is shared movement logic used by both Predators and Prey.
-///
-/// Design rationale:
 /// 1. **Quadratic energy cost**: Energy cost is proportional to speed_factor²,
-///    This creates a strong selective pressure for efficiency:
-///    - Moving at half speed costs 1/4 the energy
-///    - Animals must balance speed vs. energy conservation
-///    - Encourages prey to "rest" when safe, predators to hunt strategically
-///
-/// 2. **Energy capping**: We prevent energy from exceeding max_energy to avoid
-///    exploits where animals could accumulate unlimited energy through resting or eating.
-///
-/// 3. **Separated turning and movement**: Animals first turn, then move forward.
-///    This matches how real organisms typically orient before moving.
-///
-/// # Arguments
-/// * `core` - The animal's core state (position, angle, energy)
-/// * `speed_factor` - Multiplier for movement (0.0 = stationary, 1.0 = full speed)
-/// * `turn_delta` - Change in angle this frame (in radians)
-/// * `speed` - Base movement speed for this animal type
-/// * `moving_decay` - Energy cost multiplier for movement
-/// * `max_energy` - Maximum energy cap for this animal type
+/// 2. **Energy capping**: We prevent energy from exceeding max_energy
+/// 3. **Separated turning and movement**: Animals first turn, then move forward
 #[inline]
 fn move_with_speed_factor(
     core: &mut AnimalCore,
-    speed_factor: f32,
-    turn_delta: f32,
-    speed: f32,
-    moving_decay: f32,
-    max_energy: f32,
+    speed_factor: f32, // change in speed
+    turn_delta: f32,   // change in angle
+    speed: f32,        // base speed
+    moving_decay: f32, // energy cost multiplier for movement
 ) {
     // Apply turning
     core.angle = normalize_angle(core.angle + turn_delta);
@@ -361,11 +253,6 @@ fn move_with_speed_factor(
 
     // Deduct energy cost (quadratic in speed for realism)
     core.energy -= (speed_factor * speed_factor) * moving_decay;
-
-    // Enforce energy cap to prevent accumulation exploits
-    if core.energy > max_energy {
-        core.energy = max_energy;
-    }
 }
 
 // ============================================================================
@@ -393,17 +280,11 @@ pub struct Predator {
     /// Counter for prey eaten since last reproduction, if >c they reproduce
     pub eaten_prey: i32,
 
-    /// Cooldown timer preventing immediate re-reproduction.
-    /// After reproducing, a predator cannot reproduce again
-    /// for several frames, even if it catches 3 more prey. This prevents population explosion
+    /// Cooldown timer preventing immediate re-reproduction (applies per frame)
     pub repro_cooldown: i32,
 }
 
 /// Trait implementation for spatial hash queries.
-///
-/// Design rationale: The spatial hash accelerates "find nearby entities" queries
-/// from O(n) to O(1) average case. This is critical for performance when checking:
-
 impl HasPos for Predator {
     fn x(&self) -> f32 {
         self.core.x()
@@ -418,17 +299,10 @@ impl HasPos for Predator {
 
 impl Predator {
     /// Creates a new predator with a random brain and position.
-    ///
-    /// Design rationale: Each predator starts with:
-    /// 1. Random heading: Prevents all predators moving in the same direction
-    /// 2. Fresh neural network: Initialized with `pred_init_mut()` mutation rate
-    /// 3. Full energy: Gives new predators a fair chance to hunt
-    /// 4. Zero kill count: Must prove itself by hunting
-
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
         let angle = rng.gen_range(0.0..TWO_PI);
         // Create brain with predator-specific input count and mutation rate
-        let brain = NeuralNetwork::new(PREDATOR_SIGHT_COUNT, 2, pred_init_mut(), bias(), rng);
+        let brain = NeuralNetwork::new(PRED_SIGHT_COUNT, 2, pred_init_mut(), bias(), rng);
 
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PRED_ENERGY, brain),
@@ -446,27 +320,16 @@ impl Predator {
     /// Executes one movement/decision step for the predator.
     ///
     /// Design rationale:
-    /// 1. **Passive energy decay**: Predators lose energy each frame just for
-    ///    existing (PRED_DEFAULT_DECAY). This creates time pressure - can't wait
-    ///    forever for prey to appear.
-    ///
-    /// 2. **Energy ratio input**: The brain receives energy_ratio (current/max)
-    ///    as a bias input. This allows the brain to "know" if it's low on energy
-    ///    and should hunt more aggressively or conserve energy.
-    ///
-    /// 3. **Output clamping**:
-    ///    - speed_factor ∈ [0, 1]: Can't move backward or faster than max
-    ///    - turn_delta ∈ [-π/2, π/2]: Maximum 90° turn per frame prevents
-    ///      unrealistic instant-180° turns
-    ///
-    /// 4. **Quadratic movement cost**: See move_with_speed_factor docs.
-    ///    This is applied IN ADDITION to the passive decay, so moving is expensive.
-    ///
-    /// # Arguments
-    /// * `inputs` - Sensory inputs from get_inputs (vision rays)
+    /// 1. Predators lose energy each frame just for existing (PRED_DEFAULT_DECAY)
+    /// 2. Energy ratio input: The brain receives energy_ratio (current/max)
+    ///    as a bias input. This allows the brain to "know" it's own energy state
     pub fn move_step(&mut self, inputs: &[f32]) {
         // Passive energy decay (cost of living)
         self.core.energy -= PRED_DEFAULT_DECAY;
+
+        if self.core.energy <= 0.0 {
+            return;
+        }
 
         // Compute energy ratio for brain decision-making
         let energy_ratio = self.core.energy / PRED_ENERGY;
@@ -478,57 +341,17 @@ impl Predator {
         let speed_factor = outputs[0].clamp(0.0, 1.0);
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
 
-        if speed_factor < 0.08 {
-            return; // Don't move while resting
-        }
-
         // Apply movement (includes additional energy cost)
         move_with_speed_factor(
             &mut self.core,
             speed_factor,
             turn_delta,
-            PREDATOR_SPEED,
+            PRED_SPEED,
             PRED_MOVING_DECAY,
-            PRED_ENERGY,
         );
     }
 
-    /// Checks for nearby prey and attempts to eat them.
-    ///
-    /// This is the "hunting" phase where predators can catch and eat prey they've
-    /// gotten close enough to.
-    ///
-    /// Design rationale:
-    /// 1. **Collision radius**: The eating distance is the sum of both radii
-    ///    (PREDATOR_RADIUS + PREY_RADIUS). This means predators need to actually
-    ///    "touch" their prey to catch them.
-    ///
-    /// 2. **HashSet deduplication**: Multiple predators might try to eat the same
-    ///    prey in a single frame. The `eaten_prey_ids` HashSet ensures each prey
-    ///    can only be eaten once per frame, preventing:
-    ///    - Double-counting kills
-    ///    - Multiple energy gains from one prey
-    ///    - Allowing predators to "share" kills (first to touch it wins)
-    ///
-    /// 3. **Energy capped at max**: Energy gain is added but capped at PRED_ENERGY.
-    ///    This prevents predators from accumulating unlimited energy reserves.
-    ///
-    /// 4. **Automatic reproduction attempt**: After each kill, we immediately check
-    ///    if the predator can reproduce. This couples eating success directly to
-    ///    reproduction, creating strong evolutionary pressure.
-    ///
-    /// 5. **Multiple kills allowed**: The commented-out `break` shows we considered
-    ///    limiting to one kill per frame, but decided to allow multiple. This lets
-    ///    predators feeding on dense prey populations eat more efficiently.
-    ///
-    /// 6. **Toroidal collision detection**: Uses wrapped_distance_abs so predators
-    ///    can catch prey across world boundaries.
-    ///
-    /// # Arguments
-    /// * `prey_candidates` - Nearby prey (typically from spatial hash query)
-    /// * `eaten_prey_ids` - Set to track which prey have been eaten this frame
-    /// * `newborn_preds` - Vec to collect any offspring produced
-    /// * `rng` - Random number generator for reproduction
+    /// Checks for nearby prey and attempts to eat them
     pub fn hunt_nearby<'a, R: Rng, I>(
         &mut self,
         prey_candidates: I,
@@ -539,7 +362,7 @@ impl Predator {
         I: IntoIterator<Item = &'a Prey>,
     {
         // Collision threshold: predator and prey radii combined
-        let eat_r = PREDATOR_RADIUS + PREY_RADIUS;
+        let eat_r = PRED_RADIUS + PREY_RADIUS;
         let predator_pos = self.core.pos;
         let world_w = SCREEN_WIDTH as f32;
         let world_h = SCREEN_HEIGHT as f32;
@@ -561,7 +384,7 @@ impl Predator {
                 eaten_prey_ids.insert(id);
 
                 // Gain energy (capped at maximum)
-                self.core.energy = (self.core.energy + PREDATOR_ENERGY_GAIN).min(PRED_ENERGY);
+                self.core.energy = (self.core.energy + PRED_ENERGY_GAIN).min(PRED_ENERGY);
 
                 // Increment kill counter
                 self.eaten_prey += 1;
@@ -571,51 +394,16 @@ impl Predator {
                     newborn_preds.push(child);
                 }
 
-                // Allow multiple kills per frame (break to limit to one)
-                // If you want "max one kill per predator per frame", uncomment:
-                // break;
+                // Allows only one kill per frame
+                break;
             }
         }
     }
 
     /// Attempts to reproduce, creating an offspring if conditions are met.
-    ///
-    /// Design rationale:
-    /// 1. **Dual-gating reproduction**: Requires BOTH:
-    ///    - Cooldown expired (repro_cooldown <= 0)
-    ///    - Kill threshold met (eaten_prey >= 3)
-    ///    
-    ///    This prevents both rapid reproduction and reproduction without skill.
-    ///
-    /// 2. **Cooldown value (5 frames)**: After reproducing, must wait 5 frames.
-    ///    At 60 FPS, this is ~0.08 seconds. This prevents predator explosions but
-    ///    allows successful hunters to reproduce relatively quickly.
-    ///
-    /// 3. **Reset eaten_prey counter**: After reproducing, the counter resets to 0.
-    ///    The predator must catch 3 MORE prey to reproduce again. This ensures
-    ///    continued selective pressure even for established predators.
-    ///
-    /// 4. **Small spatial offset**: Child spawns ±1 pixel from parent. This is:
-    ///    - Small enough that they're essentially at the same location
-    ///    - Large enough that they don't have identical positions (useful for debugging)
-    ///    - Prevents perfect stacking which could cause visual glitches
-    ///
-    /// 5. **Brain inheritance with mutation**: The child gets a mutated copy of
-    ///    the parent's brain. This is the core of the genetic algorithm:
-    ///    - Successful hunters pass on their neural network structure
-    ///    - Mutations allow exploration of better strategies
-    ///    - Over generations, hunting skills improve
-    ///
-    /// 6. **Full energy for offspring**: The child starts with full energy
-    ///    (PRED_ENERGY), not a split of the parent's energy. This design choice:
-    ///    - Doesn't punish the parent for reproducing (energy-wise)
-    ///    - Gives the child a fair chance (not starting exhausted)
-    ///    - Places the reproduction cost in the "3 kills" requirement, not energy
-    ///
-    /// # Returns
-    /// `Some(Predator)` if reproduction successful, `None` otherwise
     pub fn reproduce<R: Rng>(&mut self, rng: &mut R) -> Option<Predator> {
-        const REPRO_COOLDOWN_FRAMES: i32 = 5;
+        // Cooldown timer preventing immediate re-reproduction (applies per frame)
+        const REPRO_COOLDOWN_FRAMES: i32 = 30;
 
         // Check cooldown
         if self.repro_cooldown > 0 {
@@ -654,9 +442,9 @@ impl Predator {
         AnimalCore::sense_animals(
             &self.core,
             preys,
-            PREDATOR_SIGHT_COUNT,
-            PREDATOR_SIGHT_RANGE,
-            PREDATOR_SIGHT_ANGLE,
+            PRED_SIGHT_COUNT,
+            PRED_SIGHT_RANGE,
+            PRED_SIGHT_ANGLE,
             PREY_RADIUS,
         )
     }
@@ -672,7 +460,7 @@ impl Prey {
             PREY_SIGHT_COUNT,
             PREY_SIGHT_RANGE,
             PREY_SIGHT_ANGLE,
-            PREDATOR_RADIUS,
+            PRED_RADIUS,
         )
     }
 }
@@ -681,28 +469,12 @@ impl Prey {
 // ============================================================================
 // Design rationale for Prey:
 // Prey are the "hunted" in the simulation. They must:
-// 1. Detect predators using 360° vision (can see in all directions)
+// 1. Detect predators using 300 vision
 // 2. Evade predators through movement (run away)
 // 3. Manage energy carefully (fleeing costs energy, resting recovers it)
 // 4. Reproduce over time (population growth)
-//
-// The selective pressure on prey:
-// - Must develop effective predator-avoidance behaviors
-// - Must balance fleeing (expensive) vs. resting (risky)
-// - Population grows steadily but is limited by predation
-//
-// Key asymmetries with Predators:
-// - **Vision**: Prey have 360° vision (vs. predators' 60° cone)
-//   Rationale: Prey are "prey" - they need to watch all directions for threats.
-//   Predators can afford tunnel vision when hunting.
-//
 // - **Reproduction**: Prey reproduce on a timer (vs. predators' kill-threshold)
-//   Rationale: Prey populations need to grow to sustain predators. Timer-based
-//   reproduction ensures steady growth independent of energy (as long as they
-//   survive long enough).
-//
 // - **Energy recovery**: Prey can rest to recover energy (predators cannot)
-//   Rationale: Creates the "rest when safe, flee when threatened" dynamic.
 // ============================================================================
 
 /// A prey animal that tries to avoid predators.
@@ -711,17 +483,8 @@ pub struct Prey {
     /// Core animal state (position, angle, energy, brain)
     pub core: AnimalCore,
 
-    /// Timer tracking frames since birth/last reproduction.
-    ///
-    /// Design rationale: Prey reproduce based on time, not on "eating prey".
     /// This counter increments each frame and reproduction happens when it
     /// reaches a threshold (PREY_REPRODUCATION_RATE * FPS).
-    ///
-    /// This creates predictable, steady population growth (if prey survive),
-    /// which is important for:
-    /// 1. Preventing prey extinction (population recovers over time)
-    /// 2. Providing a food source for predators
-    /// 3. Creating evolutionary pressure (faster reproducers = more offspring)
     pub rest_time: i32,
 }
 
@@ -737,15 +500,8 @@ impl HasPos for Prey {
         self.core.set_xy(x, y);
     }
 }
-
 impl Prey {
     /// Creates a new prey with a random brain and position.
-    ///
-    /// Design rationale: Each prey starts with:
-    /// 1. Random heading: Creates diverse initial movement patterns
-    /// 2. Fresh neural network: Initialized with `prey_init_mut()` mutation rate
-    /// 3. Full energy: Gives new prey a fair start
-    /// 4. Zero rest_time: Must survive to reproduce
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
         let angle = rng.gen_range(0.0..TWO_PI);
         let brain = NeuralNetwork::new(PREY_SIGHT_COUNT, 2, prey_init_mut(), bias(), rng);
@@ -763,68 +519,23 @@ impl Prey {
     }
 
     /// Executes one movement/decision step for the prey.
-    ///
-    /// Design rationale:
-    /// 1. **No passive decay**: Unlike predators, prey don't lose energy just for
-    ///    existing. Energy loss only happens through movement. This asymmetry:
-    ///    - Allows prey to "hide" by staying still
-    ///    - Creates a rest/flee decision dynamic
-    ///    - Makes prey survival more about smart movement than constant feeding
-    ///
-    /// 2. **Rest mechanic**: If prey meets BOTH conditions:
-    ///    - No danger detected (no input > 0.5)
-    ///    - Energy below 60% of maximum
-    ///    
-    ///    Then the prey rests (gains PREY_REST_ENERGY_GAIN, does NOT move).
-    ///    
-    ///    Rationale: This creates emergent behavior:
-    ///    - Prey learn to rest when safe to recover energy
-    ///    - Prey must flee when threatened, even if low on energy
-    ///    - Creates spatial patterns (prey accumulate in "safe zones")
-    ///    - Evolutionary pressure for energy-efficient evasion
-    ///
-    /// 3. **Danger detection**: We check if ANY vision sector has value > 0.5.
-    ///    Since vision outputs are binary (0.0 or 1.0), this effectively means
-    ///    "is any predator visible?" This prevents resting during danger.
-    ///
-    /// 4. **Negative energy handling**: If energy goes negative (from expensive
-    ///    fleeing), we force a minimum speed of 0.1. This prevents prey from
-    ///    "giving up" and stopping, creating a last-ditch escape attempt.
-    ///    
-    ///    Rationale: Negative energy represents exhaustion, but animals don't
-    ///    just stop moving - they keep trying to escape even when exhausted.
-    ///    This makes the simulation more dynamic.
-    ///
-    /// 5. **Commented-out code**: Shows alternative mechanics that were considered:
-    ///    - Forcing minimum speed during danger: would make fleeing mandatory
-    ///    - Different rest threshold: could change when prey choose to rest
-    ///    
-    ///    These were left as comments to document the design exploration.
-    ///
-    /// # Arguments
-    /// * `inputs` - Sensory inputs from get_inputs (vision sectors)
+    /// 1. Prey don't lose energy just for existing.
+    /// 2. If speed factor is below threshold, or low on energy, rest & gain energy.
     pub fn move_step(&mut self, inputs: &[f32]) {
         let energy_ratio = self.core.energy / PREY_ENERGY;
         let outputs = self.core.brain.forward_vectorized(inputs, energy_ratio);
 
         let speed_factor = outputs[0].clamp(0.0, 1.0);
 
-        let mut speed_factor = speed_factor;
-        // This creates the "flee when threatened, rest when safe" behavior
-        if self.core.energy < 0.1 * PREY_ENERGY {
-            speed_factor = 0.0;
-        }
-        if speed_factor < 0.1 {
+        // *THIS CAN BE ADAPTED*
+        let threshold = 0.1;
+        // threshold for moving, and if low on energy, stop moving, gain energy
+        if speed_factor < threshold || self.core.energy < 0.02 * PREY_ENERGY {
+            // moving threshold, rests and gains energy
             self.core.energy = (self.core.energy + PREY_REST_ENERGY_GAIN).min(PREY_ENERGY);
             return; // Don't move while resting
         }
-
-        // Possible enhancement: force minimum escape speed during danger
-        // let min_escape = if danger { 0.25 } else { 0.0 };
-        // speed_factor = speed_factor.max(min_escape);
-
-        // Exhaustion handling: even with negative energy, keep moving slightly
-        // This simulates an exhausted animal making last-ditch escape attempts
+        // *ADAPTED UNTIL HERE*
 
         // Apply turning and movement
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
@@ -835,65 +546,19 @@ impl Prey {
             turn_delta,
             PREY_SPEED,
             PREY_MOVING_DECAY,
-            PREY_ENERGY,
         );
     }
 
     /// Attempts to reproduce, creating an offspring if conditions are met.
-    ///
-    /// Design rationale:
-    /// 1. **Timer-based reproduction**: Unlike predators (kill-based), prey reproduce
-    ///    after surviving for a certain time. The timer (rest_time) increments every
-    ///    frame, and reproduction happens when it reaches:
-    ///    `PREY_REPRODUCATION_RATE * FRAMES_PER_SECOND`
-    ///    
-    ///    For example, if PREY_REPRODUCATION_RATE = 20.0 and FPS = 60:
-    ///    - Threshold = 20 * 60 = 1200 frames
-    ///    - At 60 FPS, this is 20 seconds of survival
-    ///    
-    ///    Rationale:
-    ///    - Prey don't have an "eat prey" mechanic, so time-based makes sense
-    ///    - Rewards survival skill directly
-    ///    - Creates steady population growth (if prey survive)
-    ///
-    /// 2. **Population control via `has_slot`**: The caller (game logic) can limit
-    ///    total prey population by controlling this parameter. If `has_slot` is false,
-    ///    the prey is "ready" to reproduce but can't until a slot opens.
-    ///    
-    ///    Crucially: We DON'T reset `rest_time` when slot is unavailable. Instead,
-    ///    we clamp it at the threshold. This means:
-    ///    - Prey "remembers" being ready to reproduce
-    ///    - As soon as a slot opens, this prey can immediately reproduce
-    ///    - Creates a "queue" of ready-to-reproduce prey
-    ///    
-    ///    Rationale: Prevents prey from "wasting" their readiness when populations
-    ///    are at capacity. Without this, prey would have to wait another full cycle
-    ///    after slots open up.
-    ///
-    /// 3. **Larger spawn offset (±50 pixels)**: Much larger than predators' ±1 pixel.
-    ///    
-    ///    Rationale:
-    ///    - Prey reproduce more often than predators
-    ///    - Larger offset prevents dense clustering
-    ///    - Spreads prey population spatially
-    ///    - Reduces local resource competition (though there are no explicit resources)
-    ///    - Makes population distributions more visually natural
-    ///
-    /// 4. **Brain inheritance**: Same as predators - child gets mutated copy of
-    ///    parent's brain, enabling evolution of better survival strategies.
-    ///
-    /// # Arguments
-    /// * `rng` - Random number generator
-    /// * `has_slot` - Whether the population has room for a new prey
-    ///
-    /// # Returns
-    /// `Some(Prey)` if reproduction successful, `None` otherwise
+    /// 1. Prey reproduce after surviving for a certain time. The timer (rest_time) increments every
+    ///    frame, and reproduction happens when it reaches: `PREY_REPRODUCATION_RATE * FRAMES_PER_SECOND`
+    /// 2. Brain inheritance: Same as predators
     pub fn reproduce<R: Rng>(&mut self, rng: &mut R, has_slot: bool) -> Option<Prey> {
         // Increment timer every frame
         self.rest_time += 1;
 
         // Calculate reproduction threshold (time in frames)
-        let threshold = (PREY_REPRODUCATION_RATE * FRAMES_PER_SECOND as f32) as i32;
+        let threshold = PREY_REPRODUCATION_RATE as i32;
 
         // Not ready yet
         if self.rest_time < threshold {
@@ -901,16 +566,13 @@ impl Prey {
         }
 
         // Ready to reproduce, but population is at capacity
-        // (German: "Sie wäre jetzt bereit. Aber kein Slot frei ist:")
         if !has_slot {
             // Clamp at threshold rather than resetting
-            // (German: "nicht zurücksetzen, sonst verliert sie den 'ready'-Status")
             self.rest_time = threshold;
             return None;
         }
 
         // Slot is free -> give birth!
-        // (German: "Slot ist frei -> Geburt")
         self.rest_time = 0; // Reset timer for next reproduction
 
         // Spawn child with larger offset than predators (±50 vs ±1)
@@ -927,6 +589,10 @@ impl Prey {
     }
 }
 
+// ============================================================================
+// TEST FUNCTIONS
+// ============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -942,8 +608,6 @@ mod tests {
     fn vec_approx_eq(a: Vec2, b: Vec2) -> bool {
         approx_eq(a.x, b.x) && approx_eq(a.y, b.y)
     }
-
-    // ==================== wrap_position tests ====================
 
     #[test]
     fn test_wrap_position_no_wrap_needed() {

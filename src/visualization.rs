@@ -2,14 +2,14 @@
 //
 // Visualization utilities for rendering the simulation
 
-use crate::data_manager::{AnimalType, Frame};
 use crate::brain_neural_network::NeuralNetwork;
+use crate::data_manager::{AnimalType, Frame};
 use crate::settings::{self};
 use macroquad::prelude::*;
 
 pub const STATS_PANEL_WIDTH: i32 = 200;
 pub const PLAYBACK_CONTROLS_HEIGHT: f32 = 60.0;
-pub const NOSE_LENGTH : f32 = 6.0;
+pub const NOSE_LENGTH: f32 = 6.0;
 
 /// Returns the window configuration for macroquad
 pub fn window_conf() -> Conf {
@@ -23,7 +23,14 @@ pub fn window_conf() -> Conf {
 
 /// Draw a line that wraps around the toroidal world.
 /// If the line crosses a border, it draws the wrapped portion on the opposite side.
-pub fn draw_wrapped_line(start: Vec2, end: Vec2, width: f32, height: f32, thickness: f32, color: Color) {
+pub fn draw_wrapped_line(
+    start: Vec2,
+    end: Vec2,
+    width: f32,
+    height: f32,
+    thickness: f32,
+    color: Color,
+) {
     // Draw the main line (possibly going outside bounds)
     draw_line(start.x, start.y, end.x, end.y, thickness, color);
 
@@ -94,7 +101,7 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize)
     let text_prey = format!("Preys: {}", prey_count);
     let frame_text = format!("Frame: {}", frame_count);
 
-    draw_text(&text_pred, text_x, 70.0, 20.0, settings::PREDATOR_COLOR);
+    draw_text(&text_pred, text_x, 70.0, 20.0, settings::PRED_COLOR);
     draw_text(&text_prey, text_x, 95.0, 20.0, settings::PREY_COLOR);
     draw_text(&frame_text, text_x, 130.0, 20.0, WHITE);
 }
@@ -135,10 +142,7 @@ impl Default for PlaybackState {
 
 /// Draws playback controls including a slider and play/pause button.
 /// Returns the new frame index if the user interacted with the slider.
-pub fn draw_playback_controls(
-    state: &mut PlaybackState,
-    total_frames: usize,
-) {
+pub fn draw_playback_controls(state: &mut PlaybackState, total_frames: usize) {
     if total_frames == 0 {
         return;
     }
@@ -190,20 +194,8 @@ pub fn draw_playback_controls(
         let bar_width = 6.0;
         let bar_height = 16.0;
         let bar_y = button_y + (button_size - bar_height) / 2.0;
-        draw_rectangle(
-            button_x + 8.0,
-            bar_y,
-            bar_width,
-            bar_height,
-            WHITE,
-        );
-        draw_rectangle(
-            button_x + 16.0,
-            bar_y,
-            bar_width,
-            bar_height,
-            WHITE,
-        );
+        draw_rectangle(button_x + 8.0, bar_y, bar_width, bar_height, WHITE);
+        draw_rectangle(button_x + 16.0, bar_y, bar_width, bar_height, WHITE);
     } else {
         // Play icon (triangle)
         let cx = button_x + button_size / 2.0 + 2.0;
@@ -335,11 +327,11 @@ pub fn draw_playback_controls(
 }
 
 pub fn draw_predator_sight(pos: Vec2, angle: f32) {
-    let n = settings::PREDATOR_SIGHT_COUNT.max(1);
+    let n = settings::PRED_SIGHT_COUNT.max(1);
     let world_w = settings::SCREEN_WIDTH as f32;
     let world_h = settings::SCREEN_HEIGHT as f32;
 
-    let fov_rad = settings::PREDATOR_SIGHT_FOV.to_radians();
+    let fov_rad = settings::PRED_SIGHT_FOV.to_radians();
     let half_fov = fov_rad / 2.0;
     let start_angle = angle - half_fov;
     let end_angle = angle + half_fov;
@@ -352,17 +344,10 @@ pub fn draw_predator_sight(pos: Vec2, angle: f32) {
         };
         let sight_angle = start_angle + t * (end_angle - start_angle);
 
-        let end_x = pos.x + settings::PREDATOR_SIGHT_RANGE * sight_angle.cos();
-        let end_y = pos.y + settings::PREDATOR_SIGHT_RANGE * sight_angle.sin();
+        let end_x = pos.x + settings::PRED_SIGHT_RANGE * sight_angle.cos();
+        let end_y = pos.y + settings::PRED_SIGHT_RANGE * sight_angle.sin();
 
-        draw_wrapped_line(
-            pos,
-            vec2(end_x, end_y),
-            world_w,
-            world_h,
-            1.0,
-            YELLOW,
-        );
+        draw_wrapped_line(pos, vec2(end_x, end_y), world_w, world_h, 1.0, YELLOW);
     }
 }
 pub fn draw_nose(pos: Vec2, angle: f32, radius: f32, color: Color) {
@@ -372,8 +357,8 @@ pub fn draw_nose(pos: Vec2, angle: f32, radius: f32, color: Color) {
 }
 
 pub fn draw_predator(pos: Vec2, angle: f32, draw_sight_lines: bool) {
-    draw_circle(pos.x, pos.y, settings::PREDATOR_RADIUS, settings::PREDATOR_COLOR);
-    draw_nose(pos, angle, settings::PREDATOR_RADIUS, settings::PREDATOR_COLOR);
+    draw_circle(pos.x, pos.y, settings::PRED_RADIUS, settings::PRED_COLOR);
+    draw_nose(pos, angle, settings::PRED_RADIUS, settings::PRED_COLOR);
     if draw_sight_lines {
         draw_predator_sight(pos, angle);
     }
@@ -392,14 +377,7 @@ pub fn draw_prey_sight(pos: Vec2, angle: f32) {
         let end_x = pos.x + settings::PREY_SIGHT_RANGE * sight_angle.cos();
         let end_y = pos.y + settings::PREY_SIGHT_RANGE * sight_angle.sin();
 
-        draw_wrapped_line(
-            pos,
-            vec2(end_x, end_y),
-            world_w,
-            world_h,
-            1.0,
-            SKYBLUE,
-        );
+        draw_wrapped_line(pos, vec2(end_x, end_y), world_w, world_h, 1.0, SKYBLUE);
     }
 }
 

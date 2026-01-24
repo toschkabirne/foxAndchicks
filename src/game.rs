@@ -68,7 +68,7 @@ impl Game {
 
         // Set up spatial hash
         let cell_pred =
-            ((settings::SCREEN_WIDTH as f32) / settings::PREDATOR_SIGHT_RANGE).floor() as i32;
+            ((settings::SCREEN_WIDTH as f32) / settings::PRED_SIGHT_RANGE).floor() as i32;
         let cell_prey =
             ((settings::SCREEN_WIDTH as f32) / settings::PREY_SIGHT_RANGE).floor() as i32;
 
@@ -159,7 +159,7 @@ impl Game {
         }
 
         // Remove dead predators and add newborns
-        self.predators.retain(|pred| pred.core.energy >= 0.0);
+        self.predators.retain(|pred| pred.core.energy > 0.0);
 
         let free_slots = self.max_predators.saturating_sub(self.predators.len());
         if free_slots > 0 {
