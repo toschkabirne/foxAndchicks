@@ -419,12 +419,26 @@ impl Predator {
         self.eaten_prey = 0;
         self.repro_cooldown = REPRO_COOLDOWN_FRAMES;
 
-        // Spawn child near parent (tiny random offset)
-        let ox = self.core.pos.x + rng.gen_range(-1..=1) as f32;
-        let oy = self.core.pos.y + rng.gen_range(-1..=1) as f32;
+        // Tiny offset near parent
+        // let ox = self.core.pos.x + rng.gen_range(-1..=1) as f32;
+        // let oy = self.core.pos.y + rng.gen_range(-1..=1) as f32;
 
-        // Create child with inherited, mutated brain
-        let mut child = Predator::new(ox, oy, rng);
+        // // Child gets parent's brain + mutations
+        // let mut child = Predator::new(ox, oy, rng);
+
+        // Using the already implmented wrap_position function should fix this issue
+
+        let pos = wrap_position(
+        vec2(
+                self.core.pos.x + rng.gen_range(-1..=1) as f32,
+                self.core.pos.y + rng.gen_range(-1..=1) as f32,
+            ),
+            SCREEN_WIDTH as f32,
+            SCREEN_HEIGHT as f32,
+        );
+
+        let mut child = Predator::new(pos.x, pos.y, rng);
+
         child.core.brain = inherited_brain_with_mutations(&self.core.brain, rng);
 
         // Child starts with full energy (not split from parent)
@@ -581,8 +595,16 @@ impl Prey {
         let oy =
             rng.gen_range((self.core.pos.y as i32 - 50)..=(self.core.pos.y as i32 + 50)) as f32;
 
-        // Create child with inherited, mutated brain
-        let mut child = Prey::new(ox, oy, rng);
+        // let mut child = Prey::new(ox, oy, rng);
+        // This should fix the prey spawning issue
+
+        let p = wrap_position(
+            vec2(ox, oy),
+            SCREEN_WIDTH as f32,
+            SCREEN_HEIGHT as f32,
+        );
+
+        let mut child = Prey::new(p.x, p.y, rng);
         child.core.brain = inherited_brain_with_mutations(&self.core.brain, rng);
 
         Some(child)

@@ -106,16 +106,24 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize)
     draw_text(&frame_text, text_x, 130.0, 20.0, WHITE);
 }
 
-/// Draws all animals in the given frame
-pub fn draw_frame(frame: &Frame, draw_sight_lines: bool) {
+/// Draws all animals in the given frame.
+/// If `selected_animal` is specified, its sightlines are drawn even if `draw_all_sight_lines` is false.
+pub fn draw_frame(
+    frame: &Frame,
+    draw_all_sight_lines: bool,
+    selected_animal: Option<(AnimalType, usize)>,
+) {
     for animal in &frame.animals {
         let pos = vec2(animal.x, animal.y);
+        let is_selected = selected_animal == Some((animal.animal_type, animal.id));
+        let show_sight = draw_all_sight_lines || is_selected;
+
         match animal.animal_type {
             AnimalType::Predator => {
-                draw_predator(pos, animal.angle, draw_sight_lines);
+                draw_predator(pos, animal.angle, show_sight);
             }
             AnimalType::Prey => {
-                draw_prey(pos, animal.angle, draw_sight_lines);
+                draw_prey(pos, animal.angle, show_sight);
             }
         }
     }
