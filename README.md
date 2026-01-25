@@ -48,6 +48,13 @@ cargo build --release
  cargo run --release -- --no-sight -f my_sim.bin
  ```
  
+ **Controls:**
+ - **Left Click**: Select an animal to inspect its Neural Network (brain structure and real-time activations). Click background to deselect.
+ - **P**: Pause/Resume simulation.
+ - **+ / =**: Increase simulation speed (physics steps per frame).
+ - **- / _**: Decrease simulation speed.
+ - **0**: Reset speed to 1x.
+ 
  ### 2. Playback Mode
  Watch a replay of a previously recorded simulation.
  
