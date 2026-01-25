@@ -2,12 +2,14 @@
 //
 // Visualization utilities for rendering the simulation
 
+use crate::brain_neural_network::NeuralNetwork;
 use crate::data_manager::{AnimalType, Frame};
-use crate::settings::{self, *};
+use crate::settings::{self};
 use macroquad::prelude::*;
 
 pub const STATS_PANEL_WIDTH: i32 = 200;
 pub const PLAYBACK_CONTROLS_HEIGHT: f32 = 60.0;
+pub const NOSE_LENGTH: f32 = 6.0;
 
 /// Returns the window configuration for macroquad
 pub fn window_conf() -> Conf {
@@ -16,6 +18,60 @@ pub fn window_conf() -> Conf {
         window_width: settings::SCREEN_WIDTH + STATS_PANEL_WIDTH,
         window_height: settings::SCREEN_HEIGHT,
         ..Default::default()
+    }
+}
+
+/// Draw a line that wraps around the toroidal world.
+/// If the line crosses a border, it draws the wrapped portion on the opposite side.
+pub fn draw_wrapped_line(
+    start: Vec2,
+    end: Vec2,
+    width: f32,
+    height: f32,
+    thickness: f32,
+    color: Color,
+) {
+    // Draw the main line (possibly going outside bounds)
+    draw_line(start.x, start.y, end.x, end.y, thickness, color);
+
+    // Check if end point is outside bounds and draw wrapped segments
+    let mut offsets = Vec::new();
+
+    if end.x < 0.0 {
+        offsets.push(vec2(width, 0.0));
+    } else if end.x >= width {
+        offsets.push(vec2(-width, 0.0));
+    }
+
+    if end.y < 0.0 {
+        offsets.push(vec2(0.0, height));
+    } else if end.y >= height {
+        offsets.push(vec2(0.0, -height));
+    }
+
+    // Draw offset copies of the line for wrapping
+    for offset in &offsets {
+        draw_line(
+            start.x + offset.x,
+            start.y + offset.y,
+            end.x + offset.x,
+            end.y + offset.y,
+            thickness,
+            color,
+        );
+    }
+
+    // Handle corner case (both x and y wrap)
+    if offsets.len() == 2 {
+        let corner_offset = offsets[0] + offsets[1];
+        draw_line(
+            start.x + corner_offset.x,
+            start.y + corner_offset.y,
+            end.x + corner_offset.x,
+            end.y + corner_offset.y,
+            thickness,
+            color,
+        );
     }
 }
 
@@ -45,51 +101,29 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize)
     let text_prey = format!("Preys: {}", prey_count);
     let frame_text = format!("Frame: {}", frame_count);
 
-    draw_text(&text_pred, text_x, 70.0, 20.0, settings::PREDATOR_COLOR);
+    draw_text(&text_pred, text_x, 70.0, 20.0, settings::PRED_COLOR);
     draw_text(&text_prey, text_x, 95.0, 20.0, settings::PREY_COLOR);
     draw_text(&frame_text, text_x, 130.0, 20.0, WHITE);
 }
 
-/// Draws all animals in the given frame
-pub fn draw_frame(frame: &Frame, draw_sight_lines: bool) {
+/// Draws all animals in the given frame.
+/// If `selected_animal` is specified, its sightlines are drawn even if `draw_all_sight_lines` is false.
+pub fn draw_frame(
+    frame: &Frame,
+    draw_all_sight_lines: bool,
+    selected_animal: Option<(AnimalType, usize)>,
+) {
     for animal in &frame.animals {
+        let pos = vec2(animal.x, animal.y);
+        let is_selected = selected_animal == Some((animal.animal_type, animal.id));
+        let show_sight = draw_all_sight_lines || is_selected;
+
         match animal.animal_type {
             AnimalType::Predator => {
-                // Draw sight lines for predator
-                let start_angle = animal.angle - 30.0_f32.to_radians();
-                let end_angle = animal.angle + 30.0_f32.to_radians();
-
-                if draw_sight_lines {
-                    for i in 0..NUMBER_SIGHTS_PREDATOR {
-                        let t = if NUMBER_SIGHTS_PREDATOR > 1 {
-                            i as f32 / (NUMBER_SIGHTS_PREDATOR as f32 - 1.0)
-                        } else {
-                            0.0
-                        };
-                        let sight_angle = start_angle + t * (end_angle - start_angle);
-
-                        let end_x = animal.x + SIGHT_RANGE_PREDATOR * sight_angle.cos();
-                        let end_y = animal.y + SIGHT_RANGE_PREDATOR * sight_angle.sin();
-
-                        draw_line(animal.x, animal.y, end_x, end_y, 1.0, YELLOW);
-                    }
-                }
-                draw_circle(animal.x, animal.y, PREDATOR_RADIUS, PREDATOR_COLOR);
+                draw_predator(pos, animal.angle, show_sight);
             }
             AnimalType::Prey => {
-                // Draw sight lines for prey
-                if draw_sight_lines {
-                    for i in 0..NUMBER_SIGHTS_PREY {
-                        let sight_angle = animal.angle
-                            + (360.0 / NUMBER_SIGHTS_PREY as f32).to_radians() * i as f32;
-
-                        let end_x = animal.x + SIGHT_RANGE_PREY * sight_angle.cos();
-                        let end_y = animal.y + SIGHT_RANGE_PREY * sight_angle.sin();
-
-                        draw_line(animal.x, animal.y, end_x, end_y, 1.0, SKYBLUE);
-                    }
-                }
-                draw_circle(animal.x, animal.y, PREY_RADIUS, PREY_COLOR);
+                draw_prey(pos, animal.angle, show_sight);
             }
         }
     }
@@ -116,10 +150,7 @@ impl Default for PlaybackState {
 
 /// Draws playback controls including a slider and play/pause button.
 /// Returns the new frame index if the user interacted with the slider.
-pub fn draw_playback_controls(
-    state: &mut PlaybackState,
-    total_frames: usize,
-) {
+pub fn draw_playback_controls(state: &mut PlaybackState, total_frames: usize) {
     if total_frames == 0 {
         return;
     }
@@ -171,20 +202,8 @@ pub fn draw_playback_controls(
         let bar_width = 6.0;
         let bar_height = 16.0;
         let bar_y = button_y + (button_size - bar_height) / 2.0;
-        draw_rectangle(
-            button_x + 8.0,
-            bar_y,
-            bar_width,
-            bar_height,
-            WHITE,
-        );
-        draw_rectangle(
-            button_x + 16.0,
-            bar_y,
-            bar_width,
-            bar_height,
-            WHITE,
-        );
+        draw_rectangle(button_x + 8.0, bar_y, bar_width, bar_height, WHITE);
+        draw_rectangle(button_x + 16.0, bar_y, bar_width, bar_height, WHITE);
     } else {
         // Play icon (triangle)
         let cx = button_x + button_size / 2.0 + 2.0;
@@ -312,5 +331,226 @@ pub fn draw_playback_controls(
     if is_key_pressed(KeyCode::End) {
         state.current_frame = total_frames - 1;
         state.is_playing = false;
+    }
+}
+
+pub fn draw_predator_sight(pos: Vec2, angle: f32) {
+    let n = settings::PRED_SIGHT_COUNT.max(1);
+    let world_w = settings::SCREEN_WIDTH as f32;
+    let world_h = settings::SCREEN_HEIGHT as f32;
+
+    let fov_rad = settings::PRED_SIGHT_FOV.to_radians();
+    let half_fov = fov_rad / 2.0;
+    let start_angle = angle - half_fov;
+    let end_angle = angle + half_fov;
+
+    for i in 0..n {
+        let t = if n > 1 {
+            i as f32 / (n as f32 - 1.0)
+        } else {
+            0.0
+        };
+        let sight_angle = start_angle + t * (end_angle - start_angle);
+
+        let end_x = pos.x + settings::PRED_SIGHT_RANGE * sight_angle.cos();
+        let end_y = pos.y + settings::PRED_SIGHT_RANGE * sight_angle.sin();
+
+        draw_wrapped_line(pos, vec2(end_x, end_y), world_w, world_h, 1.0, YELLOW);
+    }
+}
+pub fn draw_nose(pos: Vec2, angle: f32, radius: f32, color: Color) {
+    let end_x = pos.x + (NOSE_LENGTH + radius) * angle.cos();
+    let end_y = pos.y + (NOSE_LENGTH + radius) * angle.sin();
+    draw_line(pos.x, pos.y, end_x, end_y, 1.0, color);
+}
+
+pub fn draw_predator(pos: Vec2, angle: f32, draw_sight_lines: bool) {
+    draw_circle(pos.x, pos.y, settings::PRED_RADIUS, settings::PRED_COLOR);
+    draw_nose(pos, angle, settings::PRED_RADIUS, settings::PRED_COLOR);
+    if draw_sight_lines {
+        draw_predator_sight(pos, angle);
+    }
+}
+
+pub fn draw_prey_sight(pos: Vec2, angle: f32) {
+    let n = settings::PREY_SIGHT_COUNT.max(1);
+    let fov_rad = settings::PREY_SIGHT_FOV.to_radians();
+    let step = if n > 1 { fov_rad / (n as f32) } else { 0.0 };
+    let world_w = settings::SCREEN_WIDTH as f32;
+    let world_h = settings::SCREEN_HEIGHT as f32;
+
+    for i in 0..n {
+        let sight_angle = angle + step * (i as f32);
+
+        let end_x = pos.x + settings::PREY_SIGHT_RANGE * sight_angle.cos();
+        let end_y = pos.y + settings::PREY_SIGHT_RANGE * sight_angle.sin();
+
+        draw_wrapped_line(pos, vec2(end_x, end_y), world_w, world_h, 1.0, SKYBLUE);
+    }
+}
+
+pub fn draw_prey(pos: Vec2, angle: f32, draw_sight_lines: bool) {
+    draw_circle(pos.x, pos.y, settings::PREY_RADIUS, settings::PREY_COLOR);
+    draw_nose(pos, angle, settings::PREY_RADIUS, settings::PREY_COLOR);
+    if draw_sight_lines {
+        draw_prey_sight(pos, angle);
+    }
+}
+
+fn rgb(r: u8, g: u8, b: u8) -> Color {
+    Color::from_rgba(r, g, b, 255)
+}
+
+pub fn draw_neural_network(nn: &NeuralNetwork, x: f32, y: f32, width: f32, height: f32) {
+    if nn.last_inputs.is_empty() {
+        return;
+    }
+    let inputs = &nn.last_inputs;
+
+    if nn.last_activations.is_empty() {
+        return;
+    }
+    let activations = &nn.last_activations;
+
+    // Frame & background (Python: white fill + black frame)
+    draw_rectangle(x, y, width, height, WHITE);
+    draw_rectangle_lines(x, y, width, height, 2.0, BLACK);
+
+    let num_inputs = nn.num_inputs;
+    let num_outputs = nn.num_outputs;
+    let total_neurons = nn.neuron_number;
+    let num_hidden = total_neurons - (num_inputs + 1 + num_outputs);
+
+    // positions
+    let mut node_pos: Vec<(f32, f32)> = vec![(0.0, 0.0); total_neurons];
+
+    // Inputs (left)
+    for i in 0..num_inputs {
+        let px = x + 20.0;
+        let py = y + (height / (num_inputs as f32 + 1.0)) * (i as f32 + 1.0);
+        node_pos[i] = (px, py);
+    }
+
+    // Bias (left, below inputs)
+    let bias_id = num_inputs;
+    node_pos[bias_id] = (
+        x + 20.0,
+        y + (height / (num_inputs as f32 + 1.0)) * (num_inputs as f32 + 1.0),
+    );
+
+    let in_bi = num_inputs + 1;
+
+    // Outputs (right)
+    for i in 0..num_outputs {
+        let id = in_bi + i;
+        let px = x + width - 20.0;
+        let py = y + (height / (num_outputs as f32 + 1.0)) * (i as f32 + 1.0);
+        node_pos[id] = (px, py);
+    }
+
+    // Hidden (middle)
+    for i in 0..num_hidden {
+        let id = in_bi + num_outputs + i;
+        let offset_x = (width / 2.0) + (((i % 3) as i32 - 1) as f32) * 30.0;
+        let px = x + offset_x;
+        let py = y + (height / (num_hidden as f32 + 1.0)) * (i as f32 + 1.0);
+        node_pos[id] = (px, py);
+    }
+
+    // helper activation like python
+    let get_activation = |id: usize| -> f32 {
+        if id < num_inputs {
+            inputs[id]
+        } else if id == num_inputs {
+            1.0 // python: bias node drawn as 1.0
+        } else {
+            activations[id - in_bi]
+        }
+    };
+
+    // Draw edges from Input_Matrix: target rows correspond to (outputs+hidden)
+    // Python: rows, cols = nn.Input_Matrix.shape
+    for r in 0..nn.input_matrix.len() {
+        for c in 0..nn.input_matrix[r].len() {
+            let weight = nn.input_matrix[r][c];
+            if weight == 0.0 {
+                continue;
+            }
+
+            let source_id = c;
+            let target_id = in_bi + r;
+
+            let source_val = get_activation(source_id);
+            let val = source_val * weight;
+
+            let (sx, sy) = node_pos[source_id];
+            let (tx, ty) = node_pos[target_id];
+
+            if source_val > 0.0 {
+                let intensity = (val.abs() * 255.0).min(255.0) as u8;
+                let color = if val > 0.0 {
+                    rgb(0, intensity, 0)
+                } else {
+                    rgb(intensity, 0, 0)
+                };
+                let w = if intensity > 50 { 2.0 } else { 1.0 };
+                draw_line(sx, sy, tx, ty, w, color);
+            } else {
+                draw_line(sx, sy, tx, ty, 1.0, rgb(200, 200, 200));
+            }
+        }
+    }
+
+    // Draw edges from Hidden_Matrix
+    for r in 0..nn.hidden_matrix.len() {
+        for c in 0..nn.hidden_matrix[r].len() {
+            let weight = nn.hidden_matrix[r][c];
+            if weight == 0.0 {
+                continue;
+            }
+
+            let source_id = in_bi + c;
+            let target_id = in_bi + r;
+
+            let source_val = get_activation(source_id);
+            let val = source_val * weight;
+
+            let (sx, sy) = node_pos[source_id];
+            let (tx, ty) = node_pos[target_id];
+
+            if source_val > 0.0 {
+                let intensity = (val.abs() * 255.0).min(255.0) as u8;
+                let color = if val > 0.0 {
+                    rgb(0, intensity, 0)
+                } else {
+                    rgb(intensity, 0, 0)
+                };
+                let w = if intensity > 50 { 2.0 } else { 1.0 };
+                draw_line(sx, sy, tx, ty, w, color);
+            } else {
+                draw_line(sx, sy, tx, ty, 1.0, rgb(200, 200, 200));
+            }
+        }
+    }
+
+    // Draw nodes
+    for id in 0..total_neurons {
+        let val = get_activation(id);
+        let clamped = val.max(-1.0).min(1.0);
+        let c_val = (clamped * 255.0) as i32;
+
+        let mut color = if c_val > 0 {
+            rgb(0, c_val as u8, 0)
+        } else {
+            rgb(c_val.abs() as u8, 0, 0)
+        };
+
+        if c_val.abs() < 20 {
+            color = rgb(150, 150, 150);
+        }
+
+        let (px, py) = node_pos[id];
+        draw_circle(px, py, 5.0, color);
+        draw_circle_lines(px, py, 5.0, 1.0, BLACK);
     }
 }

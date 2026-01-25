@@ -6,68 +6,109 @@ An advanced simulation of predator-prey dynamics powered by evolving neural netw
 
 - **Neural Network Brains**: Entities are controlled by dynamic neural networks with evolving architectures (Input -> Hidden -> Output).
 - **Genetic Evolution**: Survival results in reproduction where offspring inherit and mutate their parent's neural weights and structures.
-- **Ray-Cast Vision**: Prey and predators use multi-directional "sights" to navigate and detect targets or threats.
+- **Ray-Cast Vision**: Prey and predators use multi-directional "sights" to detect targets or threats.
 - **Optimized Performance**: Uses Spatial Hashing for efficient $O(n)$ proximity queries, allowing for hundreds of simultaneous entities.
 - **Interactive Mode**: Take control of a predator yourself to test the survival strategies of the evolving prey.
-- **Parameter Search Pipeline**: Includes a headless runner and grid-search orchestrator to find the most stable evolutionary parameters.
+- **Parameter Search**: Includes a grid-search orchestrator to find the most stable evolutionary parameters.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Python 3.8+
-- [NumPy](https://numpy.org/) (for vectorized NN calculations)
-- [Pygame](https://www.rsgame.org/) (for visualization)
+- [Rust](https://www.rust-lang.org/tools/install) (latest stable version)
+- `cargo` (comes with Rust)
 
 ### Setup
 
 ```bash
 # Clone the repository
 git clone <your-repo-url>
-cd PredatorPray2or1
+cd foxAndchicks # or predator_vs_prey depending on checkout name
 
-# It is recommended to use a virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On macOS/Linux
-pip install numpy pygame
+# Build the project in release mode for best performance
+cargo build --release
 ```
 
-## 🎮 How to Run
+## 🎮 Usage & Binaries
+ 
+ ### 1. Main Simulation (Visual)
+ Run the standard simulation with Macroquad rendering.
+ 
+ **Command:**
+ ```bash
+ cargo run --release -- [OPTIONS]
+ ```
+ 
+ **Arguments:**
+ - `--no-sight` / `--no-sight-lines`: Disable rendering of sight lines (performance boost).
+ - `--file <path>` / `-f <path>`: Specify the output recording file path (default: `simulations/data_YYYY-MM-DD...`).
+ 
+ **Example:**
+ ```bash
+ cargo run --release -- --no-sight -f my_sim.bin
+ ```
+ 
+ **Controls:**
+ - **Left Click**: Select an animal to inspect its Neural Network (brain structure and real-time activations). Click background to deselect.
+ - **P**: Pause/Resume simulation.
+ - **+ / =**: Increase simulation speed (physics steps per frame).
+ - **- / _**: Decrease simulation speed.
+ - **0**: Reset speed to 1x.
+ 
+ ### 2. Playback Mode
+ Watch a replay of a previously recorded simulation.
+ 
+ **Command:**
+ ```bash
+ cargo run --release --bin playback -- --file <path> [OPTIONS]
+ ```
+ 
+ **Arguments:**
+ - `--file <path>` / `-f <path>`: **(Required)** Path to the recording file (e.g., `simulations/predator_vs_prey_123456789.bin`).
+ - `--no-sight`: Hide sight lines during playback.
+ 
+ **Controls:**
+ - **Space**: Play/Pause
+ - **Arrows**: Seek (Left/Right) and Speed Control (Up/Down)
+ - **Home/End**: Jump to start or end
+ 
+ ### 3. Headless Recording
+ Run the simulation without graphics for faster data collection or long runs.
+ 
+ **Command:**
+ ```bash
+ cargo run --release --bin record -- [OPTIONS]
+ ```
+ 
+ **Arguments:**
+ - `--frames <N>` / `-n <N>`: Number of frames to simulate (default: 5000).
+ - `--file <path>` / `-f <path>`: Output file path.
+ 
+ ### 4. Interactive Mode
+ Control a "Predator" manually with arrow keys to test prey avoidance behaviors.
+ 
+ **Command:**
+ ```bash
+ cargo run --release --bin interactive_sim_pred_prey
+ ```
+ 
+ **Controls:**
+ - **Arrow Keys / WASD**: Move and rotate.
+ - **Shift**: Move faster.
+ 
+ ### 5. Parameter Search
+ Runs multiple parallel headless simulations to find evolutionary parameters that maximize simulation stability.
+ 
+ **Command:**
+ ```bash
+ cargo run --release --bin param_search
+ ```
+ 
+ > **Note:** This runs a hardcoded grid search (currently set to 20 trials). It uses the `headless_runner` binary internally.
+ 
+ ## 🧠 Brain & Evolution
 
-### 1. Main Simulation (Visual)
-Run the standard simulation with Pygame rendering.
-```bash
-python main.rs
-```
-
-### 2. Interactive  Testing Mode
-Control a "Predator" with your arrow keys and observe how the prey moves to avoid you, this is for testing purpose.
-```bash
-python interactive_sim.rs
-```
-
-### 3. Parameter Search (Headless)
-Run a grid search to find parameters that maximize simulation stability and duration.
-## Here you must set the variable PYTHON_EXECUTABLE = "path/to/virtualenvFolder/venv/bin/python"
-```bash
-python parameter_search.rs
-```
-
-### 4. Profiling the functions
-Profiling the efficeny of the functions, Where is most time spend? 
-```bash
-python profile_sim.rs
-```
-
-### 5. Khans Test
-This script is only for test purpose, comparing the implemented code logic how signals are passed in a NN with a known logic: Khans cycle algorithm. This is not needed.
-```bash
-python Khans_test.rs
-```
-
-## 🧠 Brain & Evolution
-
-The core of the simulation is the `NeuralNetwork` class in `module/Brain_Neural_Network.rs`.
+The core of the simulation is the `NeuralNetwork` struct in `src/brain_neural_network.rs`.
 
 ### Mutation Parameters
 The simulation optimizes for three critical mutation rates:
@@ -75,107 +116,126 @@ The simulation optimizes for three critical mutation rates:
 - **ADD_WEIGHT**: Chance to create a new connection between existing neurons.
 - **CHANGE_WEIGHT**: Chance to perturb an existing connection's weight.
 
-### Best Found Parameters
-So Far best Parameters are (this is by far not the best, but we have to start somewhere):
-- `ADD_NEURON`: 0.1
-- `ADD_WEIGHT`: 0.5
-- `CHANGE_WEIGHT`: 0.9
-
 ## 🛠 Project Structure
 
-### Module Overview (goal)
+### Module Overview
 
+**This cannot be read without mermaid support but will be useful for the presentation**
+
+```mermaid
 classDiagram
     %% CORE SIMULATION LOGIC
     class GameEngine {
         -int currentTick
         -bool isRunning
-        +startGame()
-        +pauseGame()
-        +updateLoop()
-        +triggerExport()
+        +update()
+        +draw()
     }
 
-    class Field {
-        -int width
-        -int height
-        -Cell[][] grid
-        +getEntityAt(x, y)
-        +moveEntity(from, to)
-        +removeEntity(id)
+    class SpatialHash {
+        +insert(entity)
+        +query(range)
+        +clear()
     }
 
     %% ENTITIES
-    class Animal {
-        <<Abstract>>
-        #int id
-        #float energy
-        #int age
+    class AnimalCore {
         #Position location
-        +move()
-        +eat()
+        #float energy
+        #NeuralNetwork brain
+        +move_with_speed_factor()
+        +inherited_brain_with_mutations()
+    }
+
+    class Predator {
+        +get_inputs()
+        +move_step()
+        +hunt_nearby()
         +reproduce()
-        +die()
     }
 
-    class Fox {
-        -float huntRange
-        +hunt()
-    }
-
-    class Chick {
-        -float fleeSpeed
-        +flee()
+    class Prey {
+        +get_inputs()
+        +move_step()
+        +reproduce()
     }
 
     %% DATA LAYER
-    class DataManager {
-        +compressData(gameState)
-        +extractData(blob)
-        +saveToStorage(data)
-        +loadFromStorage(id)
-        +streamToModules()
-    }
-
-    class AnalyticsModel {
-        +calculateScore(data)
-        +analyzeTrends(populationData)
-        +generateReport()
-    }
-
-    class Visualizer {
-        +renderFrame(data)
-        +updateUI(stats)
+    class NeuralNetwork {
+        -Vec neurons
+        -Vec connections
+        +forward()
+        +mutate()
     }
 
     %% RELATIONSHIPS
-    GameEngine "1" *-- "1" Field : manages
-    GameEngine "1" o-- "*" Animal : controls
+    GameEngine --> SpatialHash : uses
+    SpatialHash o-- Predator : stores
+    SpatialHash o-- Prey : stores
     
-    Animal <|-- Fox : inherits
-    Animal <|-- Chick : inherits
+    AnimalCore <|-- Predator : embeds logic
+    AnimalCore <|-- Prey : embeds logic
     
-    Field o-- Animal : contains
-
-    GameEngine --> DataManager : sends state snapshots
-    
-    DataManager --> AnalyticsModel : feeds data
-    DataManager --> Visualizer : feeds data
+    AnimalCore *-- NeuralNetwork : possesses
+```
 
 ### Files
+ 
+ - **Core Logic:**
+   - `src/main.rs`: Entry point for the main visual simulation.
+   - `src/game.rs`: Central game loop and entity management.
+   - `src/animals.rs`: Core logic for Predator and Prey entities.
+   - `src/brain_neural_network.rs`: Vectorized Neural Network implementation with mutation logic.
+   - `src/spatial_hash.rs`: Optimization structure for collision detection.
+ 
+ - **Data & Rendering:**
+   - `src/data_manager.rs`: Handles data persistence (saving/loading simulations).
+   - `src/visualization.rs`: Rendering logic, UI components, and playback controls.
+   - `src/settings.rs`: Global simulation constants and starting values.
+ 
+ - **Binaries (`src/bin/`):**
+   - `interactive_sim_pred_prey.rs`: Manual control mode.
+   - `record.rs`: Headless recording tool.
+   - `playback.rs`: Replay tool for recorded simulations.
+   - `param_search.rs`: Parameter optimization tool.
+   - `headless_runner.rs`: Internal runner for parameter search.
 
-- `main.rs`: for the main visual simulation.
-- `interactive_sim.rs`: to test movement.
-- `headless_runner.rs`: Lightweight simulation script for data gathering.
-- `parameter_search.rs`: Orchestrator for grid-searching the parameter space.
-- `module/`:
-  - `Animals.rs`: Core logic for Predator and Prey entities.
-  - `Brain_Neural_Network.rs`: Vectorized Neural Network implementation with mutation logic.
-  - `settings.rs`: Global simulation constants and starting values.
+   ### PARAMETER FINETUNING CAN BE DONE WITH THE FOLLOWING:
+   
+## - **animals.rs:** 
+# Changes to be done in the animals.rs file
+    - `REPRO_COOLDOWN_FRAMES`: Prevents immediate re-reproduction (applies per frame)
+    - `inherited_brain_with_mutations`: let k = rng.gen_range(2..=6); // Number of mutations
+    - Prey.move_step: let threshold = 0.1; threshold, where prey rests, gains energy, if moving, no energy gain
 
+# Changes to be done in the settings.rs file
 
-## 📝 Observations & Problems
-Current areas for improvement (tracked in `interactive_sim_obersvations.txt`):
-- Improving sight field vectors for multi-neuron triggering.
-- Refining output angle calculations for better maneuverability.
-- Handling "dead" neurons in evolving architectures.
+   **For Animals** // ** = PRED or PREY
+   - `MAX_TURN_ANGLE`
+   - `*_SIGHT_COUNT`
+   - `*_SIGHT_RANGE`
+   - `*_SIGHT_ANGLE`
+   - `*_ENERGY`
+   - `*_SPEED`
+   - `*_RADIUS`
+
+   **For Predators**
+   - `PRED_DEFAULT_DECAY`
+   - `PRED_ENERGY_GAIN`
+
+   **For Prey** 
+   - `PREY_REPRODUCATION_RATE`
+   - `PREY_REST_ENERGY_GAIN`
+
+## - **neural_network.rs:** 
+# Changes to be done in the neural_network.rs file
+    - `mutate`: let k = rng.gen_range(2..=6); // Number of mutations
+    - let mut w = weight.unwrap_or_else(|| rng.gen_range(-0.2..0.2)); // initial weight 
+    - `FULLY_CONNECTED` // set to true for fully connected networks
+# Changes to be done in the settings.rs file
+    - `MUT_CHANGE_STEP`: Mutation step size
+    - `add_neuron()`
+    - `add_weight()`
+    - `change_weight()`
+   - **brain_neural_network.rs:**
+   - **settings.rs:**
