@@ -18,7 +18,7 @@ use rand::Rng;
 // which is essential for neural networks to learn complex behaviors.
 // ============================================================================
 
-const FULLY_CONNECTED: bool = false;
+const FULLY_CONNECTED: bool = true;
 /// Sigmoid activation with adjustable steepness.
 ///
 /// Design rationale: Sigmoid squashes values to (0, 1) range. The parameters
@@ -138,9 +138,11 @@ impl NeuralNetwork {
         };
 
         if FULLY_CONNECTED {
-            for _ in 0..16 {
+            for _ in 0..2 {
                 nn.add_neuron();
             }
+
+            
             for row in nn.input_matrix.iter_mut() {
                 for val in row.iter_mut() {
                     let mut w = rng.gen_range(-0.2..0.2);
@@ -148,9 +150,11 @@ impl NeuralNetwork {
                         w = 0.01;
                     }
                     *val = w;
+                    
                 }
             }
 
+        
             for row in nn.hidden_matrix.iter_mut() {
                 for val in row.iter_mut() {
                     let mut w = rng.gen_range(-0.1..0.1);
@@ -158,6 +162,7 @@ impl NeuralNetwork {
                         w = 0.01;
                     }
                     *val = w;
+                    
                 }
             }
         }
@@ -171,8 +176,8 @@ impl NeuralNetwork {
             let num_outputs = nn.num_outputs;
             let _total_neurons = nn.neuron_number;
 
-            let hl1 = num_outputs..num_outputs + 8;
-            let hl2 = num_outputs + 8..num_outputs + 16;
+            let hl1 = num_outputs..num_outputs + 1;
+            let hl2 = num_outputs + 1..num_outputs + 2;
 
             for h in hl1.clone() {
                 for i in 0..in_bi {
