@@ -38,8 +38,8 @@ pub const PREY_SIGHT_RANGE: f32 = 100.0;
 pub const PREY_SIGHT_COUNT: usize = 24;
 pub const PRED_SIGHT_COUNT: usize = 24;
 
-pub const PREY_SIGHT_ANGLE: f32 = 60.0;
-pub const PRED_SIGHT_ANGLE: f32 = 300.0;
+pub const PREY_SIGHT_ANGLE: f32 = 300.0;
+pub const PRED_SIGHT_ANGLE: f32 = 60.0;
 
 pub const PRED_COLOR: Color = RED;
 pub const PREY_COLOR: Color = BLUE;
