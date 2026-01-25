@@ -138,12 +138,12 @@ impl NeuralNetwork {
         };
 
         if FULLY_CONNECTED {
-            for _ in 0..20 {
+            for _ in 0..16 {
                 nn.add_neuron();
             }
             for row in nn.input_matrix.iter_mut() {
                 for val in row.iter_mut() {
-                    let mut w = rng.gen::<f32>() * 0.1;
+                    let mut w = rng.gen_range(-0.2..0.2);
                     if w == 0.0 {
                         w = 0.01;
                     }
@@ -153,7 +153,7 @@ impl NeuralNetwork {
 
             for row in nn.hidden_matrix.iter_mut() {
                 for val in row.iter_mut() {
-                    let mut w = rng.gen::<f32>() * 0.1;
+                    let mut w = rng.gen_range(-0.1..0.1);
                     if w == 0.0 {
                         w = 0.01;
                     }
@@ -171,12 +171,12 @@ impl NeuralNetwork {
             let num_outputs = nn.num_outputs;
             let _total_neurons = nn.neuron_number;
 
-            let hl1 = num_outputs..num_outputs + 10;
-            let hl2 = num_outputs + 10..num_outputs + 20;
+            let hl1 = num_outputs..num_outputs + 8;
+            let hl2 = num_outputs + 8..num_outputs + 16;
 
             for h in hl1.clone() {
                 for i in 0..in_bi {
-                    let mut w = rng.gen_range(-0.2..0.2);
+                    let mut w = rng.gen_range(-0.1..0.1);
                     if w == 0.0 {
                         w = 0.01;
                     }
@@ -203,7 +203,7 @@ impl NeuralNetwork {
                     if w == 0.0 {
                         w = 0.01;
                     }
-                    nn.hidden_matrix[o][col] = w;
+                    nn.hidden_matrix[o][col] = w * 0.1;
                 }
             }
             nn.eval_order = hl1.chain(hl2).map(|h| h - num_outputs).collect();
