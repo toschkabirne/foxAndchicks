@@ -200,21 +200,22 @@ classDiagram
    - `param_search.rs`: Parameter optimization tool.
    - `headless_runner.rs`: Internal runner for parameter search.
 
-   ### PARAMETER FINETUNING CAN BE DONE WITH THE FOLLOWING:
+# PARAMETER FINETUNING CAN BE DONE WITH THE FOLLOWING:
    
 ## - **animals.rs:** 
-# Changes to be done in the animals.rs file
+### Changes to be done in the animals.rs file
     - `REPRO_COOLDOWN_FRAMES`: Prevents immediate re-reproduction (applies per frame)
     - `inherited_brain_with_mutations`: let k = rng.gen_range(2..=6); // Number of mutations
     - Prey.move_step: let threshold = 0.1; threshold, where prey rests, gains energy, if moving, no energy gain
 
-# Changes to be done in the settings.rs file
+### Changes to be done in the settings.rs file
 
-   **For Animals** // ** = PRED or PREY
+   **For Animals** The *counts for both predators and prey
    - `MAX_TURN_ANGLE`
    - `*_SIGHT_COUNT`
    - `*_SIGHT_RANGE`
    - `*_SIGHT_ANGLE`
+   - `*_MOVING_DECAY`
    - `*_ENERGY`
    - `*_SPEED`
    - `*_RADIUS`
@@ -228,14 +229,29 @@ classDiagram
    - `PREY_REST_ENERGY_GAIN`
 
 ## - **neural_network.rs:** 
-# Changes to be done in the neural_network.rs file
+### Changes to be done in the neural_network.rs file
     - `mutate`: let k = rng.gen_range(2..=6); // Number of mutations
     - let mut w = weight.unwrap_or_else(|| rng.gen_range(-0.2..0.2)); // initial weight 
     - `FULLY_CONNECTED` // set to true for fully connected networks
-# Changes to be done in the settings.rs file
-    - `MUT_CHANGE_STEP`: Mutation step size
+### Changes to be done in the settings.rs file
+    - `MUT_CHANGE_STEP` // Mutation step size
+    - `*_init_mut()` // Number of mutations at initialization
     - `add_neuron()`
     - `add_weight()`
     - `change_weight()`
-   - **brain_neural_network.rs:**
-   - **settings.rs:**
+
+# General Settings
+### Changes to be done in the settings.rs file
+
+**Essential Settings**
+    - `*_INIT_NUMB` // Initial number of animals
+    - `MAX_*_COUNT` // Maximum number of animals
+    - `prey_init_mut()` // Number of mutations at initialization
+    - `pred_init_mut()` // Number of mutations at initialization
+
+**Other Settings**
+
+    - `SCREEN_WIDTH` // Screen width
+    - `SCREEN_HEIGHT` // Screen height
+    - `FRAMES_PER_SECOND` // Frames per second
+

@@ -36,7 +36,6 @@ pub struct SimulationSettings {
     pub predator_speed: Option<f32>,
     pub pred_energy: Option<f32>,
     pub predator_energy_gain: Option<f32>,
-    pub predator_lifespan: Option<f32>,
     pub pred_default_decay: Option<f32>,
     pub pred_moving_decay: Option<f32>,
 
@@ -80,7 +79,6 @@ impl SimulationSettings {
             predator_speed: Some(settings::PRED_SPEED),
             pred_energy: Some(settings::PRED_ENERGY),
             predator_energy_gain: Some(settings::PRED_ENERGY_GAIN),
-            predator_lifespan: Some(settings::PRED_LIFESPAN),
             pred_default_decay: Some(settings::PRED_DEFAULT_DECAY),
             pred_moving_decay: Some(settings::PRED_MOVING_DECAY),
 
