@@ -394,8 +394,8 @@ mod tests {
         let frame = Frame::new(&predators, &preys, 0);
 
         assert_eq!(frame.animals.len(), 2);
-        assert_eq!(frame.animals[0].id, 1);
-        assert_eq!(frame.animals[1].id, 2);
+        // IDs should be unique, but not necessarily 1 and 2 due to parallel tests
+        assert_ne!(frame.animals[0].id, frame.animals[1].id);
     }
 
     #[test]

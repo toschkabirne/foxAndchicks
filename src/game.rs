@@ -119,8 +119,10 @@ impl Game {
             .collect();
 
         // Set up spatial hash
-        let cell_size_pred = settings::PRED_SIGHT_RANGE as i32;
-        let cell_size_prey = settings::PREY_SIGHT_RANGE as i32;
+        // Predators query prey_hash, so prey_hash cell size should be PRED_SIGHT_RANGE
+        let cell_size_prey = settings::PRED_SIGHT_RANGE as i32;
+        // Preys query pred_hash, so pred_hash cell size should be PREY_SIGHT_RANGE
+        let cell_size_pred = settings::PREY_SIGHT_RANGE as i32;
 
         let world_w = settings::SCREEN_WIDTH as f32;
         let world_h = settings::SCREEN_HEIGHT as f32;
@@ -350,5 +352,130 @@ impl Game {
 
             next_frame().await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spatial_hash_fov_inclusion() {
+        // Setup: Predator at (500, 500), Prey at (500 + 100, 500)
+        // Sight range 170. Prey is within range.
+        let mut game = Game::new(None, 1, 1, 10, 10);
+
+        // Move predator to center
+        game.predators[0].core.set_xy(500.0, 500.0);
+
+        // Move prey to 1 pixel within sight range
+        let sight_range = settings::PRED_SIGHT_RANGE;
+        game.preys[0].core.set_xy(500.0 + sight_range - 1.0, 500.0);
+
+        // Rebuild hash
+        game.spatial_hash_preys.rebuild_from(&game.preys);
+
+        // Query neighbors
+        let nearby_prey_indices = game.spatial_hash_preys.query(500.0, 500.0);
+
+        // Assert: Prey should be found
+        assert!(
+            !nearby_prey_indices.is_empty(),
+            "Prey within FOV was not detected by SpatialHash"
+        );
+        assert_eq!(nearby_prey_indices[0], 0);
+    }
+
+    #[test]
+    fn test_spatial_hash_fov_exclusion() {
+        // Setup: Predator at (500, 500), Prey at (500 + 200, 500)
+        // Sight range 170. Prey is OUTSIDE range.
+        // Note: SpatialHash returns coarse candidates.
+        // With cell size = 170, 3x3 grid covers +/- 170 from center cell edges.
+        // We need to place prey far enough to be outside the 3x3 grid neighborhood.
+
+        let mut game = Game::new(None, 1, 1, 10, 10);
+
+        // Move predator to center
+        game.predators[0].core.set_xy(500.0, 500.0);
+
+        // Move prey to 1 pixel outside sight range
+        let sight_range = settings::PRED_SIGHT_RANGE;
+        game.preys[0].core.set_xy(500.0 + sight_range + 10.0, 500.0);
+
+        // Rebuild hash
+        game.spatial_hash_preys.rebuild_from(&game.preys);
+
+        // Query neighbors
+        let nearby_prey_indices = game.spatial_hash_preys.query(500.0, 500.0);
+
+        // Assert: Prey should NOT be found
+        assert!(
+            nearby_prey_indices.is_empty(),
+            "Prey outside FOV (far away) was incorrectly detected"
+        );
+    }
+
+    #[test]
+    fn test_spatial_hash_wrapping() {
+        // Setup: Predator at (5, 500), Prey at (995, 500) (Screen width 1000)
+        // They are 10 pixels apart toroidally. Should be detected.
+
+        let mut game = Game::new(None, 1, 1, 10, 10);
+
+        game.predators[0].core.set_xy(5.0, 500.0);
+        game.preys[0].core.set_xy(995.0, 500.0);
+
+        game.spatial_hash_preys.rebuild_from(&game.preys);
+
+        let nearby_prey_indices = game.spatial_hash_preys.query(5.0, 500.0);
+
+        assert!(
+            !nearby_prey_indices.is_empty(),
+            "Toroidal neighbor NOT detected"
+        );
+        assert_eq!(nearby_prey_indices[0], 0);
+    }
+
+    #[test]
+    fn test_vision_fov_exclusion() {
+        // Setup: Predator at (500, 500) facing right (0.0 rad)
+        // Prey at (550, 600).
+        // Angle to prey: atan2(100, 50) = 1.107 rad (~63.4 deg)
+        // Predator FOV is 90 deg (±45 deg).
+        // The prey should be OUTSIDE FOV but INSIDE spatial hash neighborhood.
+
+        let mut game = Game::new(None, 1, 1, 10, 10);
+
+        // Facing East
+        game.predators[0].core.set_xy(500.0, 500.0);
+        game.predators[0].core.angle = 0.0;
+
+        // Position where it's within spatial hash but outside FOV.
+        // We place it at an angle slightly larger than half-FOV.
+        let half_fov_rad = (settings::PRED_SIGHT_ANGLE / 2.0).to_radians();
+        let exclusion_angle = half_fov_rad + 0.1;
+
+        let dist = settings::PRED_SIGHT_RANGE * 0.5; // Well within range
+        let prey_x = 500.0 + dist * exclusion_angle.cos();
+        let prey_y = 500.0 + dist * exclusion_angle.sin();
+
+        game.preys[0].core.set_xy(prey_x, prey_y);
+
+        game.spatial_hash_preys.rebuild_from(&game.preys);
+
+        // 1. Verify SpatialHash DOES find it (coarse filter)
+        let nearby_indices = game.spatial_hash_preys.query(500.0, 500.0);
+        assert!(
+            !nearby_indices.is_empty(),
+            "SpatialHash should return the prey as a candidate"
+        );
+
+        // 2. Verify sensing logic EXCLUDES it (fine filter)
+        let inputs =
+            game.predators[0].get_inputs(nearby_indices.iter().filter_map(|&i| game.preys.get(i)));
+
+        let sum: f32 = inputs.iter().sum();
+        assert_eq!(sum, 0.0, "Predator should NOT see the prey outside its FOV");
     }
 }
