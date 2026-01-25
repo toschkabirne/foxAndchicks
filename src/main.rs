@@ -103,7 +103,7 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
             }
         }
 
-        draw_frame(&frame, draw_sight_lines);
+        draw_frame(&frame, draw_sight_lines, selected_animal);
 
         // Draw neural network of selected animal
         if let Some((atype, id)) = selected_animal {

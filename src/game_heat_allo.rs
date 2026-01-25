@@ -282,7 +282,7 @@ impl Game {
             };
 
             clear_background(settings::BACKGROUND_COLOR);
-            draw_frame(frame, draw_sight_lines);
+            draw_frame(frame, draw_sight_lines, None);
 
             let (pred_count, prey_count) = frame.counts();
             draw_game_stats(pred_count, prey_count, frame.tick);
