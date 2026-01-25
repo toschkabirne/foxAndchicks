@@ -32,43 +32,43 @@ pub const MAX_PREY_COUNT: usize = 1200;
 // --------------------
 // data_manager.rs settings: #Rendering Engine
 // --------------------
-pub const PREDATOR_SIGHT_RANGE: f32 = 150.0;
+pub const PRED_SIGHT_RANGE: f32 = 150.0;
 pub const PREY_SIGHT_RANGE: f32 = 100.0;
 
-pub const PREDATOR_SIGHT_FOV: f32 = 60.0;
+pub const PRED_SIGHT_FOV: f32 = 60.0;
 pub const PREY_SIGHT_FOV: f32 = 360.0;
 
 pub const PREY_SIGHT_COUNT: usize = 24;
-pub const PREDATOR_SIGHT_COUNT: usize = 24;
+pub const PRED_SIGHT_COUNT: usize = 24;
 
 pub const PREY_SIGHT_ANGLE: f32 = 60.0;
-pub const PREDATOR_SIGHT_ANGLE: f32 = 300.0;
+pub const PRED_SIGHT_ANGLE: f32 = 300.0;
 
-pub const PREDATOR_COLOR: Color = RED;
+pub const PRED_COLOR: Color = RED;
 pub const PREY_COLOR: Color = BLUE;
 
 // --------------------
-// Predator movement / energy
+// PRED movement / energy
 // --------------------
 
-pub const PREDATOR_RADIUS: f32 = 10.0;
+pub const PRED_RADIUS: f32 = 10.0;
 pub const PREY_RADIUS: f32 = 7.0;
 
 pub const MAX_TURN_ANGLE: f32 = std::f32::consts::FRAC_PI_4;
 
 pub const PRED_TIME_MOVE_DIST_WIDTH: f32 = 15.0;
 
-// PREDATOR_SPEED = SCREEN_WIDTH/(FRAMES_PER_SECOND*PRED_TIME_MOVE_DIST_WIDTH)
-pub const PREDATOR_SPEED: f32 =
+// PRED_SPEED = SCREEN_WIDTH/(FRAMES_PER_SECOND*PRED_TIME_MOVE_DIST_WIDTH)
+pub const PRED_SPEED: f32 =
     (SCREEN_WIDTH as f32) / ((FRAMES_PER_SECOND as f32) * PRED_TIME_MOVE_DIST_WIDTH);
 
 // Energy
 pub const PRED_ENERGY: f32 = 100.0;
-pub const PREDATOR_ENERGY_GAIN: f32 = 40.0;
-pub const PREDATOR_LIFESPAN: f32 = 40.0;
+pub const PRED_ENERGY_GAIN: f32 = 40.0;
+pub const PRED_LIFESPAN: f32 = 40.0;
 
-// PRED_DEFAULT_DECAY = PRED_ENERGY / (PREDATOR_LIFESPAN*FRAMES_PER_SECOND)
-pub const PRED_DEFAULT_DECAY: f32 = PRED_ENERGY / (PREDATOR_LIFESPAN * (FRAMES_PER_SECOND as f32));
+// PRED_DEFAULT_DECAY = PRED_ENERGY / (PRED_LIFESPAN*FRAMES_PER_SECOND)
+pub const PRED_DEFAULT_DECAY: f32 = PRED_ENERGY / (PRED_LIFESPAN * (FRAMES_PER_SECOND as f32));
 
 // PRED_MOVING_DECAY = PRED_ENERGY/(2*SCREEN_WIDTH)
 pub const PRED_MOVING_DECAY: f32 = PRED_ENERGY / (2.0 * (SCREEN_WIDTH as f32));
@@ -78,12 +78,12 @@ pub const PRED_MOVING_DECAY: f32 = PRED_ENERGY / (2.0 * (SCREEN_WIDTH as f32));
 // --------------------
 
 // Python:
-// PREY_SPEED = 0.8 * PREDATOR_SPEED
-pub const PREY_SPEED: f32 = 0.8 * PREDATOR_SPEED;
+// PREY_SPEED = 0.8 * PRED_SPEED
+pub const PREY_SPEED: f32 = 0.8 * PRED_SPEED;
 
 // Energy
 pub const PREY_ENERGY: f32 = 50.0;
-pub const PREY_REPRODUCATION_RATE: f32 = 16.0;
+pub const PREY_REPRODUCATION_RATE: f32 = 16.0 * FRAMES_PER_SECOND as f32;
 
 // Python:
 // PREY_MOVING_DECAY = PRED_ENERGY/(0.2*SCREEN_WIDTH)
@@ -96,6 +96,8 @@ pub const PREY_REST_ENERGY_GAIN: f32 = PREY_ENERGY / (4.0 * (FRAMES_PER_SECOND a
 // --------------------
 // Mutations parameter
 // --------------------
+pub const MUT_CHANGE_STEP: f32 = 0.05;
+
 static PREY_INIT_MUT: RwLock<usize> = RwLock::new(40);
 pub fn prey_init_mut() -> usize {
     *PREY_INIT_MUT.read().unwrap()

@@ -192,3 +192,43 @@ classDiagram
    - `playback.rs`: Replay tool for recorded simulations.
    - `param_search.rs`: Parameter optimization tool.
    - `headless_runner.rs`: Internal runner for parameter search.
+
+   ### PARAMETER FINETUNING CAN BE DONE WITH THE FOLLOWING:
+   
+## - **animals.rs:** 
+# Changes to be done in the animals.rs file
+    - `REPRO_COOLDOWN_FRAMES`: Prevents immediate re-reproduction (applies per frame)
+    - `inherited_brain_with_mutations`: let k = rng.gen_range(2..=6); // Number of mutations
+    - Prey.move_step: let threshold = 0.1; threshold, where prey rests, gains energy, if moving, no energy gain
+
+# Changes to be done in the settings.rs file
+
+   **For Animals** // ** = PRED or PREY
+   - `MAX_TURN_ANGLE`
+   - `*_SIGHT_COUNT`
+   - `*_SIGHT_RANGE`
+   - `*_SIGHT_ANGLE`
+   - `*_ENERGY`
+   - `*_SPEED`
+   - `*_RADIUS`
+
+   **For Predators**
+   - `PRED_DEFAULT_DECAY`
+   - `PRED_ENERGY_GAIN`
+
+   **For Prey** 
+   - `PREY_REPRODUCATION_RATE`
+   - `PREY_REST_ENERGY_GAIN`
+
+## - **neural_network.rs:** 
+# Changes to be done in the neural_network.rs file
+    - `mutate`: let k = rng.gen_range(2..=6); // Number of mutations
+    - let mut w = weight.unwrap_or_else(|| rng.gen_range(-0.2..0.2)); // initial weight 
+    - `FULLY_CONNECTED` // set to true for fully connected networks
+# Changes to be done in the settings.rs file
+    - `MUT_CHANGE_STEP`: Mutation step size
+    - `add_neuron()`
+    - `add_weight()`
+    - `change_weight()`
+   - **brain_neural_network.rs:**
+   - **settings.rs:**
