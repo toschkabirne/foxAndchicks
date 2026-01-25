@@ -57,9 +57,41 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
     let mut game = Game::new_default(filename);
     let mut selected_animal: Option<(AnimalType, usize)> = None;
 
+    let mut paused = false;
+    let mut speed_multiplier: usize = 1;
+    let mut frame = game.next_frame();
+
     // Run simulation with live rendering
     loop {
         clear_background(settings::BACKGROUND_COLOR);
+
+        // Handle inputs
+        if is_key_pressed(KeyCode::P) {
+            paused = !paused;
+        }
+
+        if is_key_pressed(KeyCode::Equal) || is_key_pressed(KeyCode::KpAdd) {
+            speed_multiplier += 1;
+        }
+
+        if (is_key_pressed(KeyCode::Minus) || is_key_pressed(KeyCode::KpSubtract))
+            && speed_multiplier > 1
+        {
+            speed_multiplier -= 1;
+        }
+
+        if is_key_pressed(KeyCode::Key0) || is_key_pressed(KeyCode::Kp0) {
+            speed_multiplier = 1;
+        }
+
+        // Update physics
+        if !paused {
+            for _ in 0..speed_multiplier {
+                frame = game.next_frame();
+            }
+            // If speeding up, we might skip drawing some frames, which is intended.
+            // We only draw the LAST calculated frame of this batch.
+        }
 
         // Handle mouse input to select/deselect animals
         if is_mouse_button_pressed(MouseButton::Left) {
@@ -71,7 +103,6 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
             }
         }
 
-        let frame = game.next_frame();
         draw_frame(&frame, draw_sight_lines);
 
         // Draw neural network of selected animal
@@ -86,6 +117,21 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
 
         let (pred_count, prey_count) = frame.counts();
         draw_game_stats(pred_count, prey_count, game.frame_count);
+
+        // Draw speed/status
+        let status_x = settings::SCREEN_WIDTH as f32 + 15.0;
+        let status_y = 180.0;
+        if paused {
+            draw_text("PAUSED", status_x, status_y, 30.0, RED);
+        } else {
+            draw_text(
+                &format!("Speed: {}x", speed_multiplier),
+                status_x,
+                status_y,
+                24.0,
+                WHITE,
+            );
+        }
 
         // Optional: break after certain frames or on key press
         if is_key_pressed(KeyCode::Escape) {
