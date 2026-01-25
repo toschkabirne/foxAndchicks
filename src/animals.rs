@@ -26,6 +26,8 @@ const TWO_PI: f32 = 2.0 * PI;
 // helper function to generate unique IDs for animals
 #[inline]
 fn next_id() -> usize {
+    assert!(NEXT_ID.load(Ordering::Relaxed) > 0);
+    assert!(NEXT_ID.load(Ordering::Relaxed) < usize::MAX);
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
@@ -42,12 +44,14 @@ fn next_id() -> usize {
 /// Wraps a position to stay within world boundaries (toroidal topology).
 #[inline]
 pub fn wrap_position(pos: Vec2, width: f32, height: f32) -> Vec2 {
+    assert!(width > 0.0 && height > 0.0);
     vec2(pos.x.rem_euclid(width), pos.y.rem_euclid(height))
 }
 
 /// Computes the shortest vector from point `a` to point `b` in a toroidal world.
 #[inline]
 pub fn wrapped_distance_vector(a: Vec2, b: Vec2, width: f32, height: f32) -> Vec2 {
+    assert!(width > 0.0 && height > 0.0);
     let mut dx = b.x - a.x;
     let mut dy = b.y - a.y;
 
@@ -64,6 +68,8 @@ pub fn wrapped_distance_vector(a: Vec2, b: Vec2, width: f32, height: f32) -> Vec
     } else if dy < -height / 2.0 {
         dy += height; // Wrap down
     }
+    assert!(dx >= -width / 2.0 && dx <= width / 2.0);
+    assert!(dy >= -height / 2.0 && dy <= height / 2.0);
 
     vec2(dx, dy)
 }
@@ -71,12 +77,15 @@ pub fn wrapped_distance_vector(a: Vec2, b: Vec2, width: f32, height: f32) -> Vec
 /// Computes the shortest Euclidean distance between two points in a toroidal world.
 #[inline]
 pub fn wrapped_distance_abs(a: Vec2, b: Vec2, width: f32, height: f32) -> f32 {
+    assert!(width > 0.0 && height > 0.0);
     wrapped_distance_vector(a, b, width, height).length()
 }
 
 /// Normalizes an angle to the range [-π, π].
 #[inline]
 pub fn normalize_angle(angle: f32) -> f32 {
+    //TODO: This should not get called with angles outside of [-PI, PI]
+    //assert!(angle >= -PI && angle <= PI);
     (angle + PI).rem_euclid(TWO_PI) - PI
 }
 
@@ -132,16 +141,20 @@ impl AnimalCore {
 
     #[inline]
     pub fn x(&self) -> f32 {
+        assert!(self.pos.x >= 0.0 && self.pos.x <= SCREEN_WIDTH as f32);
         self.pos.x
     }
 
     #[inline]
     pub fn y(&self) -> f32 {
+        assert!(self.pos.y >= 0.0 && self.pos.y <= SCREEN_HEIGHT as f32);
         self.pos.y
     }
 
     #[inline]
     pub fn set_xy(&mut self, x: f32, y: f32) {
+        assert!(x >= 0.0 && x <= SCREEN_WIDTH as f32);
+        assert!(y >= 0.0 && y <= SCREEN_HEIGHT as f32);
         self.pos = vec2(x, y);
     }
 }
@@ -164,30 +177,41 @@ impl AnimalCore {
         I: IntoIterator<Item = &'a T>,
         T: HasCore + 'a,
     {
+        assert!(number_sights > 0);
         let n = number_sights.max(1);
         let mut inputs = vec![0.0; n];
 
         let cone_half_angle = (sight_angle / 2.0_f32).to_radians();
+        assert!(cone_half_angle > 0.0 && cone_half_angle < PI);
 
         let animal_pos = core.pos;
+        assert!(animal_pos.x >= 0.0 && animal_pos.x <= SCREEN_WIDTH as f32);
+        assert!(animal_pos.y >= 0.0 && animal_pos.y <= SCREEN_HEIGHT as f32);
         let world_w = SCREEN_WIDTH as f32;
         let world_h = SCREEN_HEIGHT as f32;
 
         for enemy in enemies {
             let enemy_pos = enemy.core().pos;
+            assert!(enemy_pos.x >= 0.0 && enemy_pos.x <= SCREEN_WIDTH as f32);
+            assert!(enemy_pos.y >= 0.0 && enemy_pos.y <= SCREEN_HEIGHT as f32);
 
             // Compute shortest vector to prey (accounting for world wrapping)
             let delta = wrapped_distance_vector(animal_pos, enemy_pos, world_w, world_h);
             let dist = delta.length();
+            //
+            assert!(dist >= 0.0);
 
             // Skip if prey is too close (div-by-zero) or out of range
-            if dist <= 0.0 || dist >= sight_range {
+            if dist == 0.0 || dist >= sight_range {
                 continue;
             }
             // Compute angle to prey using wrapped delta
             let angle_to_enemy = delta.y.atan2(delta.x);
+            assert!(angle_to_enemy >= -PI && angle_to_enemy <= PI);
 
             let angular_width = (enemy_radius).atan2(dist);
+            //TODO: Is this correct?
+            //assert!(angular_width >= 0.0 && angular_width <= cone_half_angle);
 
             // Check each vision ray to see if prey overlaps with it
             for i in 0..n {
@@ -201,9 +225,11 @@ impl AnimalCore {
                 } else {
                     0.5 // Single ray: use middle of cone
                 };
+                assert!(t >= 0.0 && t <= 1.0);
 
                 let offset = -cone_half_angle + (2.0 * cone_half_angle) * t; // [-cone_half .. +cone_half]
                 let ray_angle = normalize_angle(core.angle + offset);
+                assert!(ray_angle >= -PI && ray_angle <= PI);
 
                 // Check if prey's angular disc overlaps this ray
                 let diff = normalize_angle(ray_angle - angle_to_enemy).abs();
@@ -221,7 +247,7 @@ impl AnimalCore {
 #[inline]
 fn inherited_brain_with_mutations<R: Rng>(parent: &NeuralNetwork, rng: &mut R) -> NeuralNetwork {
     let mut brain = parent.clone();
-    let k = rng.gen_range(2..=6); // Apply multiple mutations
+    let k = rng.gen_range(2..=6); // Apply multiple mutations TODO: make this configurable
     for _ in 0..k {
         brain.mutate(rng);
     }
@@ -241,8 +267,14 @@ fn move_with_speed_factor(
     speed: f32,        // base speed
     moving_decay: f32, // energy cost multiplier for movement
 ) {
+    assert!(speed_factor >= 0.0 && speed_factor <= 1.0);
+    assert!(turn_delta >= -PI && turn_delta <= PI);
+    //TODO: What range should speed be in?
+    //assert!(speed >= 0.0 && speed <= 1.0);
+    assert!(moving_decay >= 0.0 && moving_decay <= 1.0);
     // Apply turning
     core.angle = normalize_angle(core.angle + turn_delta);
+    assert!(core.angle >= -PI && core.angle <= PI);
 
     // Apply forward movement based on current heading
     core.pos.x += speed_factor * speed * core.angle.cos();
@@ -251,8 +283,12 @@ fn move_with_speed_factor(
     // Handle world wrapping (toroidal topology)
     core.pos = wrap_position(core.pos, SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32);
 
+    assert!(core.pos.x >= 0.0 && core.pos.x <= SCREEN_WIDTH as f32);
+    assert!(core.pos.y >= 0.0 && core.pos.y <= SCREEN_HEIGHT as f32);
     // Deduct energy cost (quadratic in speed for realism)
     core.energy -= (speed_factor * speed_factor) * moving_decay;
+    //TODO: Is negative energy allowed here?
+    //assert!(core.energy >= 0.0);
 }
 
 // ============================================================================
@@ -287,12 +323,16 @@ pub struct Predator {
 /// Trait implementation for spatial hash queries.
 impl HasPos for Predator {
     fn x(&self) -> f32 {
+        assert!(self.core.x() >= 0.0 && self.core.x() <= SCREEN_WIDTH as f32);
         self.core.x()
     }
     fn y(&self) -> f32 {
+        assert!(self.core.y() >= 0.0 && self.core.y() <= SCREEN_HEIGHT as f32);
         self.core.y()
     }
     fn set_pos(&mut self, x: f32, y: f32) {
+        assert!(x >= 0.0 && x <= SCREEN_WIDTH as f32);
+        assert!(y >= 0.0 && y <= SCREEN_HEIGHT as f32);
         self.core.set_xy(x, y);
     }
 }
@@ -300,10 +340,13 @@ impl HasPos for Predator {
 impl Predator {
     /// Creates a new predator with a random brain and position.
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
+        assert!(x >= 0.0 && x <= SCREEN_WIDTH as f32);
+        assert!(y >= 0.0 && y <= SCREEN_HEIGHT as f32);
         let angle = rng.gen_range(0.0..TWO_PI);
         // Create brain with predator-specific input count and mutation rate
         let brain = NeuralNetwork::new(PRED_SIGHT_COUNT, 2, pred_init_mut(), bias(), rng);
-
+        assert!(brain.num_inputs == PRED_SIGHT_COUNT);
+        assert!(brain.num_outputs == 2);
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PRED_ENERGY, brain),
             eaten_prey: 0,
@@ -331,8 +374,12 @@ impl Predator {
             return;
         }
 
+        assert!(self.core.energy >= 0.0 && self.core.energy <= PRED_ENERGY);
+
         // Compute energy ratio for brain decision-making
         let energy_ratio = self.core.energy / PRED_ENERGY;
+
+        assert!(energy_ratio >= 0.0 && energy_ratio <= 1.0);
 
         // Run neural network to get movement decisions
         let outputs = self.core.brain.forward_vectorized(inputs, energy_ratio);
@@ -340,6 +387,9 @@ impl Predator {
         // Extract and clamp movement parameters
         let speed_factor = outputs[0].clamp(0.0, 1.0);
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
+
+        assert!(speed_factor >= 0.0 && speed_factor <= 1.0);
+        assert!(turn_delta >= -MAX_TURN_ANGLE && turn_delta <= MAX_TURN_ANGLE);
 
         // Apply movement (includes additional energy cost)
         move_with_speed_factor(
@@ -363,6 +413,9 @@ impl Predator {
     {
         // Collision threshold: predator and prey radii combined
         let eat_r = PRED_RADIUS + PREY_RADIUS;
+
+        assert!(eat_r >= 0.0);
+
         let predator_pos = self.core.pos;
         let world_w = SCREEN_WIDTH as f32;
         let world_h = SCREEN_HEIGHT as f32;
@@ -378,6 +431,8 @@ impl Predator {
             // Check if close enough to eat (using toroidal distance)
             let prey_pos = prey.core.pos;
             let dist = wrapped_distance_abs(predator_pos, prey_pos, world_w, world_h);
+
+            assert!(dist >= 0.0);
 
             if dist < eat_r {
                 // Mark prey as eaten (prevents double-eating)
@@ -405,15 +460,21 @@ impl Predator {
         // Cooldown timer preventing immediate re-reproduction (applies per frame)
         const REPRO_COOLDOWN_FRAMES: i32 = 30;
 
+        assert!(REPRO_COOLDOWN_FRAMES > 0);
+
         // Check cooldown
         if self.repro_cooldown > 0 {
             return None;
         }
 
+        assert!(self.repro_cooldown >= 0);
+
         // Check kill threshold
         if self.eaten_prey < 3 {
             return None;
         }
+
+        assert!(self.eaten_prey >= 0);
 
         // Reset counters for next reproduction cycle
         self.eaten_prey = 0;
@@ -429,13 +490,16 @@ impl Predator {
         // Using the already implmented wrap_position function should fix this issue
 
         let pos = wrap_position(
-        vec2(
+            vec2(
                 self.core.pos.x + rng.gen_range(-1..=1) as f32,
                 self.core.pos.y + rng.gen_range(-1..=1) as f32,
             ),
             SCREEN_WIDTH as f32,
             SCREEN_HEIGHT as f32,
         );
+
+        assert!(pos.x >= 0.0 && pos.x <= SCREEN_WIDTH as f32);
+        assert!(pos.y >= 0.0 && pos.y <= SCREEN_HEIGHT as f32);
 
         let mut child = Predator::new(pos.x, pos.y, rng);
 
@@ -505,20 +569,29 @@ pub struct Prey {
 /// Trait implementation for spatial hash queries (same as Predator).
 impl HasPos for Prey {
     fn x(&self) -> f32 {
+        assert!(self.core.x() >= 0.0 && self.core.x() <= SCREEN_WIDTH as f32);
         self.core.x()
     }
     fn y(&self) -> f32 {
+        assert!(self.core.y() >= 0.0 && self.core.y() <= SCREEN_HEIGHT as f32);
         self.core.y()
     }
     fn set_pos(&mut self, x: f32, y: f32) {
+        assert!(x >= 0.0 && x <= SCREEN_WIDTH as f32);
+        assert!(y >= 0.0 && y <= SCREEN_HEIGHT as f32);
         self.core.set_xy(x, y);
     }
 }
 impl Prey {
     /// Creates a new prey with a random brain and position.
     pub fn new<R: Rng>(x: f32, y: f32, rng: &mut R) -> Self {
+        assert!(x >= 0.0 && x <= SCREEN_WIDTH as f32);
+        assert!(y >= 0.0 && y <= SCREEN_HEIGHT as f32);
+
         let angle = rng.gen_range(0.0..TWO_PI);
         let brain = NeuralNetwork::new(PREY_SIGHT_COUNT, 2, prey_init_mut(), bias(), rng);
+
+        assert!(angle >= 0.0 && angle < TWO_PI);
 
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PREY_ENERGY, brain),
@@ -536,10 +609,17 @@ impl Prey {
     /// 1. Prey don't lose energy just for existing.
     /// 2. If speed factor is below threshold, or low on energy, rest & gain energy.
     pub fn move_step(&mut self, inputs: &[f32]) {
+        assert!(inputs.len() == PREY_SIGHT_COUNT);
+
         let energy_ratio = self.core.energy / PREY_ENERGY;
         let outputs = self.core.brain.forward_vectorized(inputs, energy_ratio);
 
+        assert!(outputs.len() == 2);
+        assert!(energy_ratio >= 0.0 && energy_ratio <= 1.0);
+
         let speed_factor = outputs[0].clamp(0.0, 1.0);
+
+        assert!(speed_factor >= 0.0 && speed_factor <= 1.0);
 
         // *THIS CAN BE ADAPTED*
         let threshold = 0.1;
@@ -553,6 +633,8 @@ impl Prey {
 
         // Apply turning and movement
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
+
+        assert!(turn_delta >= -MAX_TURN_ANGLE && turn_delta <= MAX_TURN_ANGLE);
 
         move_with_speed_factor(
             &mut self.core,
@@ -573,6 +655,8 @@ impl Prey {
 
         // Calculate reproduction threshold (time in frames)
         let threshold = PREY_REPRODUCATION_RATE as i32;
+
+        assert!(threshold >= 0);
 
         // Not ready yet
         if self.rest_time < threshold {
@@ -595,17 +679,17 @@ impl Prey {
         let oy =
             rng.gen_range((self.core.pos.y as i32 - 50)..=(self.core.pos.y as i32 + 50)) as f32;
 
-        // let mut child = Prey::new(ox, oy, rng);
-        // This should fix the prey spawning issue
+        let p = wrap_position(vec2(ox, oy), SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32);
 
-        let p = wrap_position(
-            vec2(ox, oy),
-            SCREEN_WIDTH as f32,
-            SCREEN_HEIGHT as f32,
-        );
+        assert!(p.x >= 0.0 && p.x <= SCREEN_WIDTH as f32);
+        assert!(p.y >= 0.0 && p.y <= SCREEN_HEIGHT as f32);
 
         let mut child = Prey::new(p.x, p.y, rng);
         child.core.brain = inherited_brain_with_mutations(&self.core.brain, rng);
+
+        assert!(child.core.energy >= 0.0 && child.core.energy <= PREY_ENERGY);
+        assert!(child.core.brain.num_inputs == PREY_SIGHT_COUNT);
+        assert!(child.core.brain.num_outputs == 2);
 
         Some(child)
     }
