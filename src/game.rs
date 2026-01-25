@@ -119,16 +119,14 @@ impl Game {
             .collect();
 
         // Set up spatial hash
-        let cell_pred =
-            ((settings::SCREEN_WIDTH as f32) / settings::PRED_SIGHT_RANGE).floor() as i32;
-        let cell_prey =
-            ((settings::SCREEN_WIDTH as f32) / settings::PREY_SIGHT_RANGE).floor() as i32;
+        let cell_size_pred = settings::PRED_SIGHT_RANGE as i32;
+        let cell_size_prey = settings::PREY_SIGHT_RANGE as i32;
 
         let world_w = settings::SCREEN_WIDTH as f32;
         let world_h = settings::SCREEN_HEIGHT as f32;
 
-        let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_pred, world_w, world_h);
-        let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_prey, world_w, world_h);
+        let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_size_pred, world_w, world_h);
+        let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_size_prey, world_w, world_h);
 
         let data_manager = file_name.map(|name| DataManager::new(name));
 
