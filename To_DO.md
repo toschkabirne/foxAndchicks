@@ -14,8 +14,8 @@ Make sure to quickly mark something if you are working on it. Just put your name
 
 ## Neural Network
 
-- [ ] Use fully connected NN
-- [ ] Initial weights: Create a simple NN that serves as a working starting point for evolution
+- [x] Use fully connected NN
+- [x] Initial weights: Create a simple NN that serves as a working starting point for evolution
 - [ ] Activation function: Check the behavior of different activation functions (e.g. sigmoid, ReLU, tanh)
 - [ ] Check if we can improve matrix multiplication (e.g. sparse matrix, decomposition etc..)
     - [ ] Maybe Sparse Matrix in Brain_Neural_Network.py hidden & input matrix, right now is dense
