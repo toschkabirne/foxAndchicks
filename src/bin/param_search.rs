@@ -18,6 +18,14 @@ struct Params {
     pred_init_mut: Option<usize>,
     #[serde(rename = "PREY_INIT_MUT")]
     prey_init_mut: Option<usize>,
+    #[serde(rename = "MAX_PRED_COUNT")]
+    max_pred_count: Option<usize>,
+    #[serde(rename = "MAX_PREY_COUNT")]
+    max_prey_count: Option<usize>,
+    #[serde(rename = "PRED_INIT_NUMB")]
+    pred_init_numb: Option<usize>,
+    #[serde(rename = "PREY_INIT_NUMB")]
+    prey_init_numb: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,11 +42,15 @@ struct SimResult {
 fn generate_random_params() -> Params {
     let mut rng = rand::thread_rng();
     Params {
-        add_neuron: Some(rng.gen_range(0.01..0.2)),
+        add_neuron: Some(rng.gen_range(0.01..0.9)),
         add_weight: Some(rng.gen_range(0.1..0.9)),
         change_weight: Some(rng.gen_range(0.1..0.9)),
         pred_init_mut: Some(rng.gen_range(10..60)),
         prey_init_mut: Some(rng.gen_range(5..30)),
+        max_pred_count: Some(rng.gen_range(50..500)),
+        max_prey_count: Some(rng.gen_range(100..2000)),
+        pred_init_numb: Some(rng.gen_range(10..150)),
+        prey_init_numb: Some(rng.gen_range(20..500)),
     }
 }
 
@@ -53,7 +65,7 @@ fn run_trial(params: &Params) -> Option<SimResult> {
         .arg("--params")
         .arg(&params_json)
         .arg("--max_steps")
-        .arg("2000") // fast trials
+        .arg("20000") // Longer max steps for search
         .output();
 
     // Fallback to cargo run if binary not found (slower/noisy)
@@ -83,7 +95,7 @@ fn run_trial(params: &Params) -> Option<SimResult> {
 }
 
 fn main() {
-    let num_trials = 20; // run 20 parallel sims
+    let num_trials = 50; // run 50 parallel sims
     println!("Running {} parameter search trials...", num_trials);
 
     // Ensure we have a build first (optional but good)
