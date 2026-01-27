@@ -4,7 +4,7 @@
 
 use crate::brain_neural_network::NeuralNetwork;
 use crate::data_manager::{AnimalType, Frame};
-use crate::settings::{self};
+use crate::settings::{self, SCREEN_HEIGHT};
 use macroquad::prelude::*;
 
 // // for graph:
@@ -27,14 +27,6 @@ pub const GRAPH_HEIGHT: i32 = 220;
 /// Enable graph with `--graph` (or `--lv-graph`).
 pub fn graph_enabled() -> bool {
     std::env::args().any(|a| a == "--graph" || a == "--lv-graph")
-}
-
-fn total_height() -> i32 {
-    if graph_enabled() {
-        settings::SCREEN_HEIGHT + GRAPH_HEIGHT
-    } else {
-        settings::SCREEN_HEIGHT
-    }
 }
 
 /// Returns the window configuration for macroquad
@@ -108,14 +100,14 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize)
         panel_x,
         0.0,
         STATS_PANEL_WIDTH as f32,
-        total_height() as f32,
+        SCREEN_HEIGHT as f32,
         Color::from_rgba(30, 30, 30, 255),
     );
     draw_line(
         panel_x,
         0.0,
         panel_x,
-        total_height() as f32,
+        SCREEN_HEIGHT as f32,
         2.0,
         WHITE,
     );
@@ -132,66 +124,95 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize)
     draw_text(&frame_text, text_x, 130.0, 20.0, WHITE);
 }
 
-pub fn draw_population_graph_fullscreen(history: &[(usize, usize)], current_frame: usize) {
-    // Reuse your existing graph drawer by temporarily treating the graph as the whole window.
-    // This is basically a copy of draw_population_graph, but with (0,0) and SCREEN_HEIGHT.
-    let area_x = 0.0;
-    let area_y = 0.0;
-    let area_w = (settings::SCREEN_WIDTH + STATS_PANEL_WIDTH) as f32;
-    let area_h = settings::SCREEN_HEIGHT as f32;
-
-    draw_rectangle(area_x, area_y, area_w, area_h, Color::from_rgba(22, 22, 22, 255));
-    draw_text("Population over time (press G to return)", area_x + 45.0, area_y + 24.0, 22.0, WHITE);
-
-    if history.is_empty() {
-        draw_text("No data yet", area_x + 45.0, area_y + 60.0, 22.0, WHITE);
+pub fn draw_population_graph_fullscreen(
+    history: &[(usize, usize)],
+    current_frame: usize,
+    total_frames: usize,
+) {
+    if !graph_enabled() {
         return;
     }
 
-    // padding (slightly larger since we have more space)
-    let pad_l = 60.0;
-    let pad_r = 25.0;
-    let pad_t = 40.0;
-    let pad_b = 40.0;
+    // Leave room for playback controls at the bottom
+    let area_x = 0.0;
+    let area_y = 0.0;
+    let area_w = (settings::SCREEN_WIDTH) as f32;
+    let area_h = (settings::SCREEN_HEIGHT as f32 - PLAYBACK_CONTROLS_HEIGHT).max(1.0);
+
+    draw_rectangle(area_x, area_y, area_w, area_h, Color::from_rgba(22, 22, 22, 255));
+    draw_text(
+        "Population over time (press G to return)",
+        area_x + 20.0,
+        area_y + 30.0,
+        24.0,
+        WHITE,
+    );
+
+    if history.is_empty() || total_frames < 2 {
+        draw_text("No data", area_x + 20.0, area_y + 60.0, 20.0, WHITE);
+        return;
+    }
+
+    // Padding
+    let pad_l = 70.0;
+    let pad_r = 20.0;
+    let pad_t = 55.0;
+    let pad_b = 35.0;
 
     let plot_x0 = area_x + pad_l;
     let plot_y0 = area_y + pad_t;
-    let plot_w = area_w - pad_l - pad_r;
-    let plot_h = area_h - pad_t - pad_b;
+    let plot_w = (area_w - pad_l - pad_r).max(1.0);
+    let plot_h = (area_h - pad_t - pad_b).max(1.0);
 
-    // axes
+    // Axes
     draw_line(plot_x0, plot_y0, plot_x0, plot_y0 + plot_h, 2.0, Color::from_rgba(90, 90, 90, 255));
     draw_line(plot_x0, plot_y0 + plot_h, plot_x0 + plot_w, plot_y0 + plot_h, 2.0, Color::from_rgba(90, 90, 90, 255));
 
-    // limit samples ~ one per pixel
-    let max_samples = plot_w.max(1.0) as usize;
-    let n = history.len();
-    let start = if n > max_samples { n - max_samples } else { 0 };
-    let slice = &history[start..];
-
-    // y scale
+    // Precompute max + means over the whole recording (stable scaling like your picture)
     let mut max_y: usize = 1;
-    for &(pred, prey) in slice.iter() {
+    let mut sum_pred: f64 = 0.0;
+    let mut sum_prey: f64 = 0.0;
+    for &(pred, prey) in history.iter().take(total_frames) {
         max_y = max_y.max(pred).max(prey);
+        sum_pred += pred as f64;
+        sum_prey += prey as f64;
     }
     let max_y_f = max_y as f32;
+    let mean_pred = (sum_pred / total_frames as f64) as f32;
+    let mean_prey = (sum_prey / total_frames as f64) as f32;
 
-    // grid + labels
+    // Grid + labels (0, 50%, 100%)
     for frac in [0.0_f32, 0.5, 1.0] {
         let y = plot_y0 + plot_h * (1.0 - frac);
         draw_line(plot_x0, y, plot_x0 + plot_w, y, 1.0, Color::from_rgba(45, 45, 45, 255));
         let label_val = (max_y_f * frac).round() as usize;
-        draw_text(&format!("{}", label_val), area_x + 12.0, y + 6.0, 18.0, Color::from_rgba(200, 200, 200, 255));
+        draw_text(&format!("{}", label_val), area_x + 18.0, y + 6.0, 18.0, Color::from_rgba(200, 200, 200, 255));
     }
 
-    let len = slice.len().max(2);
-    let dx = plot_w / (len as f32 - 1.0);
+    // Mean lines (like your attachment)
+    let mean_pred_y = plot_y0 + plot_h * (1.0 - (mean_pred / max_y_f));
+    let mean_prey_y = plot_y0 + plot_h * (1.0 - (mean_prey / max_y_f));
+    draw_line(plot_x0, mean_pred_y, plot_x0 + plot_w, mean_pred_y, 2.0, Color::from_rgba(180, 180, 180, 180));
+    draw_line(plot_x0, mean_prey_y, plot_x0 + plot_w, mean_prey_y, 2.0, Color::from_rgba(180, 180, 180, 180));
+
+    draw_text("Mean predators", plot_x0 + 10.0, mean_pred_y - 8.0, 18.0, settings::PRED_COLOR);
+    draw_text("Mean preys",     plot_x0 + 10.0, mean_prey_y - 8.0, 18.0, settings::PREY_COLOR);
+
+    // X mapping across the full timeline
+    let x_for_frame = |fi: usize| -> f32 {
+        plot_x0 + (fi as f32 / (total_frames as f32 - 1.0)) * plot_w
+    };
+
+    // Downsample to ~one point per pixel
+    let step = ((total_frames as f32 / plot_w).ceil() as usize).max(1);
 
     let mut prev_pred: Option<Vec2> = None;
     let mut prev_prey: Option<Vec2> = None;
 
-    for (i, &(pred, prey)) in slice.iter().enumerate() {
-        let x = plot_x0 + i as f32 * dx;
+    for i in (0..total_frames).step_by(step) {
+        let (pred, prey) = history[i];
+        let x = x_for_frame(i);
+
         let pred_y = plot_y0 + plot_h * (1.0 - (pred as f32 / max_y_f));
         let prey_y = plot_y0 + plot_h * (1.0 - (prey as f32 / max_y_f));
 
@@ -209,158 +230,19 @@ pub fn draw_population_graph_fullscreen(history: &[(usize, usize)], current_fram
         prev_prey = Some(prey_pt);
     }
 
-    // current frame marker
-    if current_frame >= start && current_frame < history.len() {
-        let local = current_frame - start;
-        let x = plot_x0 + (local as f32) * dx;
-        draw_line(x, plot_y0, x, plot_y0 + plot_h, 1.0, Color::from_rgba(180, 180, 180, 180));
+    // Current frame marker
+    if current_frame < total_frames {
+        let x = x_for_frame(current_frame);
+        draw_line(x, plot_y0, x, plot_y0 + plot_h, 2.0, Color::from_rgba(220, 220, 220, 120));
     }
 
-    // legend
-    let legend_y = area_y + area_h - 14.0;
+    // Legend
+    let legend_y = area_y + area_h - 10.0;
     draw_text("Predators", plot_x0, legend_y, 20.0, settings::PRED_COLOR);
     draw_text("Preys", plot_x0 + 150.0, legend_y, 20.0, settings::PREY_COLOR);
 }
 
 
-/// Draws a simple predator/prey population graph (Lotka–Volterra style).
-/// `history`: (pred_count, prey_count) per frame.
-pub fn draw_population_graph(history: &[(usize, usize)], current_frame: usize) {
-    if !graph_enabled() {
-        return;
-    }
-
-    // Graph area is below the simulation.
-    let area_x = 0.0;
-    let area_y = settings::SCREEN_HEIGHT as f32;
-    let area_w = (settings::SCREEN_WIDTH + STATS_PANEL_WIDTH) as f32;
-    let area_h = GRAPH_HEIGHT as f32;
-
-    // Always draw the panel background so you can see it's enabled
-    draw_rectangle(area_x, area_y, area_w, area_h, Color::from_rgba(22, 22, 22, 255));
-    draw_line(
-        area_x,
-        area_y,
-        area_x + area_w,
-        area_y,
-        2.0,
-        Color::from_rgba(60, 60, 60, 255),
-    );
-    draw_text("Population over time", area_x + 45.0, area_y + 16.0, 18.0, WHITE);
-
-    if history.is_empty() {
-        draw_text("No data yet", area_x + 45.0, area_y + 40.0, 18.0, WHITE);
-        return;
-    }
-
-    // padding
-    let pad_l = 45.0;
-    let pad_r = 15.0;
-    let pad_t = 18.0;
-    let pad_b = 22.0;
-
-    let plot_x0 = area_x + pad_l;
-    let plot_y0 = area_y + pad_t;
-    let plot_w = area_w - pad_l - pad_r;
-    let plot_h = area_h - pad_t - pad_b;
-
-    // axes
-    draw_line(
-        plot_x0,
-        plot_y0,
-        plot_x0,
-        plot_y0 + plot_h,
-        1.5,
-        Color::from_rgba(90, 90, 90, 255),
-    );
-    draw_line(
-        plot_x0,
-        plot_y0 + plot_h,
-        plot_x0 + plot_w,
-        plot_y0 + plot_h,
-        1.5,
-        Color::from_rgba(90, 90, 90, 255),
-    );
-
-    // show last ~one point per pixel for performance/readability
-    let max_samples = plot_w.max(1.0) as usize;
-    let n = history.len();
-    let start = if n > max_samples { n - max_samples } else { 0 };
-    let slice = &history[start..];
-
-    // y scale
-    let mut max_y: usize = 1;
-    for &(pred, prey) in slice.iter() {
-        max_y = max_y.max(pred).max(prey);
-    }
-    let max_y_f = max_y as f32;
-
-    // horizontal grid + labels
-    for frac in [0.0_f32, 0.5, 1.0] {
-        let y = plot_y0 + plot_h * (1.0 - frac);
-        draw_line(
-            plot_x0,
-            y,
-            plot_x0 + plot_w,
-            y,
-            1.0,
-            Color::from_rgba(45, 45, 45, 255),
-        );
-        let label_val = (max_y_f * frac).round() as usize;
-        draw_text(
-            &format!("{}", label_val),
-            area_x + 8.0,
-            y + 6.0,
-            16.0,
-            Color::from_rgba(200, 200, 200, 255),
-        );
-    }
-
-    let len = slice.len().max(2);
-    let dx = plot_w / (len as f32 - 1.0);
-
-    let mut prev_pred: Option<Vec2> = None;
-    let mut prev_prey: Option<Vec2> = None;
-
-    for (i, &(pred, prey)) in slice.iter().enumerate() {
-        let x = plot_x0 + i as f32 * dx;
-        let pred_y = plot_y0 + plot_h * (1.0 - (pred as f32 / max_y_f));
-        let prey_y = plot_y0 + plot_h * (1.0 - (prey as f32 / max_y_f));
-
-        let pred_pt = vec2(x, pred_y);
-        let prey_pt = vec2(x, prey_y);
-
-        if let Some(p) = prev_pred {
-            draw_line(p.x, p.y, pred_pt.x, pred_pt.y, 2.0, settings::PRED_COLOR);
-        }
-        if let Some(p) = prev_prey {
-            draw_line(p.x, p.y, prey_pt.x, prey_pt.y, 2.0, settings::PREY_COLOR);
-        }
-
-        prev_pred = Some(pred_pt);
-        prev_prey = Some(prey_pt);
-    }
-
-    // current frame marker (if visible)
-    if current_frame >= start && current_frame < history.len() {
-        let local = current_frame - start;
-        let x = plot_x0 + (local as f32) * dx;
-        draw_line(
-            x,
-            plot_y0,
-            x,
-            plot_y0 + plot_h,
-            1.0,
-            Color::from_rgba(180, 180, 180, 180),
-        );
-    }
-
-    draw_text("Population over time", plot_x0, area_y + 16.0, 18.0, WHITE);
-    let legend_y = area_y + area_h - 6.0;
-    draw_text("Predators", plot_x0, legend_y, 16.0, settings::PRED_COLOR);
-    draw_text("Preys", plot_x0 + 120.0, legend_y, 16.0, settings::PREY_COLOR);
-
-}
 
 /// Draws all animals in the given frame.
 /// If `selected_animal` is specified, its sightlines are drawn even if `draw_all_sight_lines` is false.
