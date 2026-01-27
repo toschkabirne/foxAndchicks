@@ -422,7 +422,7 @@ impl NeuralNetwork {
         }
     }
 
-    /// Changes 4 random weights
+    /// Changes random weights
     fn change_weight<R: Rng>(&mut self, rng: &mut R) {
         let in_bi = self.num_inputs + 1;
 
