@@ -6,6 +6,7 @@ Make sure to quickly mark something if you are working on it. Just put your name
 
 - [ ] Also store metadata s.a. max_preds, max_preys, init_NN_weights etc.
 
+
 ## Animal
 
 - [x] Create animal class that predator and prey inherit from
@@ -26,8 +27,8 @@ Make sure to quickly mark something if you are working on it. Just put your name
 ## Game
 
 - [x] Add a slider to playback visualisation
-- [ ] Add graphs
-- [ ] toroidal wrap for spawns
+- [x] Add graphs
+- [x] toroidal wrap for spawns
 
 ## General
 
