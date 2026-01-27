@@ -20,6 +20,14 @@ struct Params {
     pred_init_mut: Option<usize>,
     #[serde(rename = "PREY_INIT_MUT")]
     prey_init_mut: Option<usize>,
+    #[serde(rename = "MAX_PRED_COUNT")]
+    max_pred_count: Option<usize>,
+    #[serde(rename = "MAX_PREY_COUNT")]
+    max_prey_count: Option<usize>,
+    #[serde(rename = "PRED_INIT_NUMB")]
+    pred_init_numb: Option<usize>,
+    #[serde(rename = "PREY_INIT_NUMB")]
+    prey_init_numb: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -127,10 +135,10 @@ fn run_simulation(params_raw: &serde_json::Value, max_steps: i64) -> SimResult {
     // Create game using your encapsulated logic
     let mut game = Game::new(
         None, // DataManager is not used in headless mode
-        settings::PRED_INIT_NUMB,
-        settings::PREY_INIT_NUMB,
-        settings::MAX_PRED_COUNT,
-        settings::MAX_PREY_COUNT,
+        params.max_pred_count.unwrap(),
+        params.max_prey_count.unwrap(),
+        params.pred_init_numb.unwrap(),
+        params.prey_init_numb.unwrap(),
     );
 
     let start = Instant::now();

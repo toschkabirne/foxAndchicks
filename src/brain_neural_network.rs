@@ -18,7 +18,7 @@ use rand::Rng;
 // which is essential for neural networks to learn complex behaviors.
 // ============================================================================
 
-const FULLY_CONNECTED: bool = false;
+const FULLY_CONNECTED: bool = true;
 /// Sigmoid activation with adjustable steepness.
 ///
 /// Design rationale: Sigmoid squashes values to (0, 1) range. The parameters
@@ -138,9 +138,7 @@ impl NeuralNetwork {
         };
 
         if FULLY_CONNECTED {
-            for _ in 0..16 {
-                nn.add_neuron();
-            }
+            // Initialize the NN to be fully connected, every input neuron is connected with each output neuron, no hidden neurons yet
             for row in nn.input_matrix.iter_mut() {
                 for val in row.iter_mut() {
                     let mut w = rng.gen_range(-0.2..0.2);
@@ -148,65 +146,25 @@ impl NeuralNetwork {
                         w = 0.01;
                     }
                     *val = w;
+                    
                 }
             }
 
+        
             for row in nn.hidden_matrix.iter_mut() {
                 for val in row.iter_mut() {
-                    let mut w = rng.gen_range(-0.1..0.1);
+                    let mut w = rng.gen_range(-0.2..0.2);
                     if w == 0.0 {
                         w = 0.01;
                     }
                     *val = w;
+                    
                 }
             }
         }
 
         for _ in 0..mutate {
             nn.mutate(rng);
-        }
-
-        if FULLY_CONNECTED {
-            let in_bi = num_inputs + 1;
-            let num_outputs = nn.num_outputs;
-            let _total_neurons = nn.neuron_number;
-
-            let hl1 = num_outputs..num_outputs + 8;
-            let hl2 = num_outputs + 8..num_outputs + 16;
-
-            for h in hl1.clone() {
-                for i in 0..in_bi {
-                    let mut w = rng.gen_range(-0.1..0.1);
-                    if w == 0.0 {
-                        w = 0.01;
-                    }
-                    nn.input_matrix[h][i] = w;
-                }
-            }
-
-            for h2 in hl2.clone() {
-                for h1 in hl1.clone() {
-                    // hidden_matrix columns are hidden-only, indexed by (activation_idx - num_outputs)
-                    let col = h1 - num_outputs;
-                    let mut w = rng.gen_range(-0.2..0.2);
-                    if w == 0.0 {
-                        w = 0.01;
-                    }
-                    nn.hidden_matrix[h2][col] = w;
-                }
-            }
-
-            for o in 0..nn.num_outputs {
-                for h2 in hl2.clone() {
-                    let col = h2 - num_outputs;
-                    let mut w = rng.gen_range(-0.2..0.2);
-                    if w == 0.0 {
-                        w = 0.01;
-                    }
-                    nn.hidden_matrix[o][col] = w * 0.1;
-                }
-            }
-            nn.eval_order = hl1.chain(hl2).map(|h| h - num_outputs).collect();
         }
         nn
     }

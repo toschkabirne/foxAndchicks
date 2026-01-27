@@ -6,6 +6,7 @@ Make sure to quickly mark something if you are working on it. Just put your name
 
 - [ ] Also store metadata s.a. max_preds, max_preys, init_NN_weights etc.
 
+
 ## Animal
 
 - [x] Create animal class that predator and prey inherit from
@@ -14,8 +15,8 @@ Make sure to quickly mark something if you are working on it. Just put your name
 
 ## Neural Network
 
-- [ ] Use fully connected NN
-- [ ] Initial weights: Create a simple NN that serves as a working starting point for evolution
+- [x] Use fully connected NN
+- [x] Initial weights: Create a simple NN that serves as a working starting point for evolution
 - [ ] Activation function: Check the behavior of different activation functions (e.g. sigmoid, ReLU, tanh)
 - [ ] Check if we can improve matrix multiplication (e.g. sparse matrix, decomposition etc..)
     - [ ] Maybe Sparse Matrix in Brain_Neural_Network.py hidden & input matrix, right now is dense
@@ -26,12 +27,13 @@ Make sure to quickly mark something if you are working on it. Just put your name
 ## Game
 
 - [x] Add a slider to playback visualisation
-- [ ] Add graphs
-- [ ] toroidal wrap for spawns
+- [x] Add graphs
+- [x] toroidal wrap for spawns
 
 ## General
 
 - [ ] Profiling: Check where the code spends the most time and where
     - [ ] game_heat_allo vs game to compare if removing heap allocations gives speed up
 - [ ] Add a lot of asserts (they verify that the code is correct and Prof. Koch likes them) 
+- [ ] Check TODOs together
 

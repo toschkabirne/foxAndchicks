@@ -2,7 +2,11 @@ use crate::animals::{wrapped_distance_abs, Predator, Prey};
 use crate::data_manager::{AnimalType, DataManager, Frame, IndexedFrameReader};
 use crate::settings::{self};
 use crate::spatial_hash::SpatialHash;
-use crate::visualization::{draw_frame, draw_game_stats, draw_playback_controls, PlaybackState};
+use crate::visualization::{
+    draw_frame, draw_game_stats, draw_playback_controls, draw_population_graph_fullscreen,
+    graph_enabled, PlaybackState,
+};
+
 use ::rand::Rng;
 use macroquad::prelude::*;
 use rayon::prelude::*;
@@ -17,7 +21,7 @@ pub struct Game {
     spatial_hash_preys: SpatialHash,
     max_predators: usize,
     max_preys: usize,
-    data_manager: Option<DataManager>,
+    pub data_manager: Option<DataManager>,
     scratch_idxs: Vec<usize>,
 }
 
@@ -84,9 +88,7 @@ impl Game {
                 .map(|p| &p.core.brain),
         }
     }
-}
 
-impl Game {
     /// Creates a new Game with custom parameters
     pub fn new(
         file_name: Option<&str>,
@@ -299,6 +301,25 @@ impl Game {
         println!("  Home/End: Jump to start/end");
         println!("  Click and drag slider to seek");
 
+        // only build history if the user asked for it (avoids rereading the file otherwise).
+        let pop_history: Vec<(usize, usize)> = if graph_enabled() {
+            let mut h = Vec::with_capacity(total_frames);
+            for f in DataManager::read_frames(file_name) {
+                h.push(f.counts());
+            }
+            h
+        } else {
+            Vec::new()
+        };
+
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        enum ViewMode {
+            Simulation,
+            Graph,
+        }
+
+        let mut view_mode = ViewMode::Simulation;
+
         let mut playback_state = PlaybackState::default();
         let mut accumulated_time = 0.0;
         let frame_duration = 1.0 / 60.0; // Base frame rate
@@ -308,50 +329,86 @@ impl Game {
         let mut cached_frame_index: Option<usize> = None;
 
         loop {
-            // Handle exit
-            if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
-                break;
+    // Handle exit
+    if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
+        break;
+    }
+
+    // --- INPUT / CONTROL PHASE ---
+    if graph_enabled() && is_key_pressed(KeyCode::G) {
+        view_mode = match view_mode {
+            ViewMode::Simulation => ViewMode::Graph,
+            ViewMode::Graph => ViewMode::Simulation,
+        };
+    }
+
+    // Update frame based on playback state
+    if playback_state.is_playing && !playback_state.is_dragging {
+        accumulated_time += get_frame_time() * playback_state.playback_speed;
+
+        while accumulated_time >= frame_duration {
+            accumulated_time -= frame_duration;
+            if playback_state.current_frame < total_frames - 1 {
+                playback_state.current_frame += 1;
+            } else {
+                playback_state.current_frame = 0;
             }
+        }
+    }
 
-            // Update frame based on playback state
-            if playback_state.is_playing && !playback_state.is_dragging {
-                accumulated_time += get_frame_time() * playback_state.playback_speed;
+    // Only read frame from disk if it changed
+    if cached_frame_index != Some(playback_state.current_frame) {
+        cached_frame = frame_reader.get_frame(playback_state.current_frame);
+        cached_frame_index = Some(playback_state.current_frame);
+    }
 
-                while accumulated_time >= frame_duration {
-                    accumulated_time -= frame_duration;
-                    if playback_state.current_frame < total_frames - 1 {
-                        playback_state.current_frame += 1;
-                    } else {
-                        // Loop back to start or pause at end
-                        playback_state.current_frame = 0;
-                    }
-                }
-            }
+    let frame = match &cached_frame {
+        Some(f) => f,
+        None => {
+            eprintln!("Failed to read frame {}", playback_state.current_frame);
+            break;
+        }
+    };
 
-            // Only read frame from disk if it changed
-            if cached_frame_index != Some(playback_state.current_frame) {
-                cached_frame = frame_reader.get_frame(playback_state.current_frame);
-                cached_frame_index = Some(playback_state.current_frame);
-            }
+    clear_background(settings::BACKGROUND_COLOR);
 
-            let frame = match &cached_frame {
-                Some(f) => f,
-                None => {
-                    eprintln!("Failed to read frame {}", playback_state.current_frame);
-                    break;
-                }
-            };
-
-            clear_background(settings::BACKGROUND_COLOR);
+    // --- DRAW PHASE ---
+    match view_mode {
+        ViewMode::Simulation => {
             draw_frame(frame, draw_sight_lines, None);
 
             let (pred_count, prey_count) = frame.counts();
             draw_game_stats(pred_count, prey_count, frame.tick);
 
-            draw_playback_controls(&mut playback_state, total_frames);
-
-            next_frame().await;
+            if graph_enabled() {
+                draw_text(
+                    "Press G for graph view",
+                    15.0,
+                    26.0,
+                    22.0,
+                    Color::from_rgba(220, 220, 220, 255),
+                );
+            }
         }
+
+        ViewMode::Graph => {
+            // Fullscreen graph view
+            draw_population_graph_fullscreen(&pop_history,
+                 playback_state.current_frame, 
+                 total_frames);
+
+
+            let (pred_count, prey_count) = frame.counts();
+            draw_game_stats(pred_count, prey_count, frame.tick);
+        }
+    }
+
+    // Controls visible in both modes
+    draw_playback_controls(&mut playback_state, total_frames);
+
+    next_frame().await;
+}
+
     }
 }
 

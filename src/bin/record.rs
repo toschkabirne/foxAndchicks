@@ -60,9 +60,21 @@ fn record(filename: &str, total_frames: i32) {
         }
     }
 
+    // Extract filename before dropping game (which closes the file)
+    let filename_with_timestamp = game
+        .get_data_filename()
+        .expect("DataManager should be present")
+        .to_string();
+
     // IMPORTANT: close/flush the writer before reading the file for playback
     drop(game);
 
-    println!("Recording complete and saved to: {}", filename);
-    println!("Playback using: cargo run --bin playback -- --file {}", filename);
+    println!(
+        "Recording complete and saved to: {}",
+        filename_with_timestamp
+    );
+    println!(
+        "Playback using: cargo run --bin playback -- --file {}",
+        filename_with_timestamp
+    );
 }

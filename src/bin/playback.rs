@@ -14,6 +14,7 @@ async fn main() {
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--no-sight" | "--no-sight-lines" => draw_sight_lines = false,
+            "--graph" | "--lv-graph" => { /* visualization::window_conf will pick it up */ }
             "--file" | "-f" => {
                 filename = it.next();
             }
