@@ -17,7 +17,7 @@ pub struct Game {
     spatial_hash_preys: SpatialHash,
     max_predators: usize,
     max_preys: usize,
-    data_manager: Option<DataManager>,
+    pub data_manager: Option<DataManager>,
     scratch_idxs: Vec<usize>,
 }
 
@@ -84,9 +84,7 @@ impl Game {
                 .map(|p| &p.core.brain),
         }
     }
-}
 
-impl Game {
     /// Creates a new Game with custom parameters
     pub fn new(
         file_name: Option<&str>,
