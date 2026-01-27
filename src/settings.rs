@@ -60,6 +60,9 @@ const PRED_LIFESPAN_SPRINT: f32 = 20.0;
 // Energy gain per eaten Prey, only change the number, not Pred_energy
 pub const PRED_ENERGY_GAIN: f32 = PRED_ENERGY * 0.4;
 
+// number of frames until reproduction cooldown is over
+pub const REPRO_COOLDOWN_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
+
 // This is the theoretical time, how long it needs to cross the screen width
 pub const PRED_TIME_MOVE_DIST_WIDTH: f32 = 15.0;
 

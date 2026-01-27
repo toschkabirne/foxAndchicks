@@ -20,20 +20,25 @@ Make sure to quickly mark something if you are working on it. Just put your name
 - [ ] Activation function: Check the behavior of different activation functions (e.g. sigmoid, ReLU, tanh)
 - [ ] Check if we can improve matrix multiplication (e.g. sparse matrix, decomposition etc..)
     - [ ] Maybe Sparse Matrix in Brain_Neural_Network.py hidden & input matrix, right now is dense
-- [ ] Check if we should improve sightlines
-    - [ ] not only one line activated when animal gets close
-    - [ ] or new approach: maybe with some Angular calculation
+- [ ] We could change the logic of the sightlines, not binary 0/1, but additionally dependent on the distance a value in [0,1]
+    - Note: This might be a bigger change, which needs to be carefully considered
 
 ## Game
 
 - [x] Add a slider to playback visualisation
 - [x] Add graphs
 - [x] toroidal wrap for spawns
+- [ ] On Click onto a animal shows:
+    - [x] its Neural Network
+    - [ ] its energy
+    - [ ] for predators: digestive cooldown (REPRO_COOLDOWN_FRAMES)
+    
+    
 
 ## General
 
 - [ ] Profiling: Check where the code spends the most time and where
-    - [ ] game_heat_allo vs game to compare if removing heap allocations gives speed up
+    - [ ] game_heat_allo vs game to compare if removing heap allocations gives speed up // Anton will take care of this
 - [ ] Add a lot of asserts (they verify that the code is correct and Prof. Koch likes them) 
 - [ ] Check TODOs together
 

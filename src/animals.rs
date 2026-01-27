@@ -459,7 +459,6 @@ impl Predator {
     /// Attempts to reproduce, creating an offspring if conditions are met.
     pub fn reproduce<R: Rng>(&mut self, rng: &mut R) -> Option<Predator> {
         // Cooldown timer preventing immediate re-reproduction (applies per frame)
-        const REPRO_COOLDOWN_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
 
         assert!(REPRO_COOLDOWN_FRAMES > 0);
 
