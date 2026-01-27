@@ -6,8 +6,8 @@ use crate::visualization::{
     draw_frame, draw_game_stats, draw_playback_controls, draw_population_graph_fullscreen,
     graph_enabled, PlaybackState,
 };
-use ::rand::rngs::StdRng;
-use ::rand::{Rng, SeedableRng};
+
+use ::rand::Rng;
 use macroquad::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -97,7 +97,7 @@ impl Game {
         max_preds: usize,
         max_preys: usize,
     ) -> Self {
-        let mut rng = StdRng::from_seed(settings::SEED);
+        let mut rng = ::rand::thread_rng();
 
         // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
         let predators: Vec<Predator> = (0..num_preds)
@@ -194,7 +194,7 @@ impl Game {
         // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
         let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
         let mut newborn_preds: Vec<Predator> = Vec::new();
-        let mut rng = StdRng::from_seed(settings::SEED);
+        let mut rng = ::rand::thread_rng();
 
         for pred in self.predators.iter_mut() {
             // Hunt near new position (preys haven't moved yet)
@@ -329,86 +329,86 @@ impl Game {
         let mut cached_frame_index: Option<usize> = None;
 
         loop {
-            // Handle exit
-            if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
-                break;
+    // Handle exit
+    if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
+        break;
+    }
+
+    // --- INPUT / CONTROL PHASE ---
+    if graph_enabled() && is_key_pressed(KeyCode::G) {
+        view_mode = match view_mode {
+            ViewMode::Simulation => ViewMode::Graph,
+            ViewMode::Graph => ViewMode::Simulation,
+        };
+    }
+
+    // Update frame based on playback state
+    if playback_state.is_playing && !playback_state.is_dragging {
+        accumulated_time += get_frame_time() * playback_state.playback_speed;
+
+        while accumulated_time >= frame_duration {
+            accumulated_time -= frame_duration;
+            if playback_state.current_frame < total_frames - 1 {
+                playback_state.current_frame += 1;
+            } else {
+                playback_state.current_frame = 0;
             }
-
-            // --- INPUT / CONTROL PHASE ---
-            if graph_enabled() && is_key_pressed(KeyCode::G) {
-                view_mode = match view_mode {
-                    ViewMode::Simulation => ViewMode::Graph,
-                    ViewMode::Graph => ViewMode::Simulation,
-                };
-            }
-
-            // Update frame based on playback state
-            if playback_state.is_playing && !playback_state.is_dragging {
-                accumulated_time += get_frame_time() * playback_state.playback_speed;
-
-                while accumulated_time >= frame_duration {
-                    accumulated_time -= frame_duration;
-                    if playback_state.current_frame < total_frames - 1 {
-                        playback_state.current_frame += 1;
-                    } else {
-                        playback_state.current_frame = 0;
-                    }
-                }
-            }
-
-            // Only read frame from disk if it changed
-            if cached_frame_index != Some(playback_state.current_frame) {
-                cached_frame = frame_reader.get_frame(playback_state.current_frame);
-                cached_frame_index = Some(playback_state.current_frame);
-            }
-
-            let frame = match &cached_frame {
-                Some(f) => f,
-                None => {
-                    eprintln!("Failed to read frame {}", playback_state.current_frame);
-                    break;
-                }
-            };
-
-            clear_background(settings::BACKGROUND_COLOR);
-
-            // --- DRAW PHASE ---
-            match view_mode {
-                ViewMode::Simulation => {
-                    draw_frame(frame, draw_sight_lines, None);
-
-                    let (pred_count, prey_count) = frame.counts();
-                    draw_game_stats(pred_count, prey_count, frame.tick);
-
-                    if graph_enabled() {
-                        draw_text(
-                            "Press G for graph view",
-                            15.0,
-                            26.0,
-                            22.0,
-                            Color::from_rgba(220, 220, 220, 255),
-                        );
-                    }
-                }
-
-                ViewMode::Graph => {
-                    // Fullscreen graph view
-                    draw_population_graph_fullscreen(
-                        &pop_history,
-                        playback_state.current_frame,
-                        total_frames,
-                    );
-
-                    let (pred_count, prey_count) = frame.counts();
-                    draw_game_stats(pred_count, prey_count, frame.tick);
-                }
-            }
-
-            // Controls visible in both modes
-            draw_playback_controls(&mut playback_state, total_frames);
-
-            next_frame().await;
         }
+    }
+
+    // Only read frame from disk if it changed
+    if cached_frame_index != Some(playback_state.current_frame) {
+        cached_frame = frame_reader.get_frame(playback_state.current_frame);
+        cached_frame_index = Some(playback_state.current_frame);
+    }
+
+    let frame = match &cached_frame {
+        Some(f) => f,
+        None => {
+            eprintln!("Failed to read frame {}", playback_state.current_frame);
+            break;
+        }
+    };
+
+    clear_background(settings::BACKGROUND_COLOR);
+
+    // --- DRAW PHASE ---
+    match view_mode {
+        ViewMode::Simulation => {
+            draw_frame(frame, draw_sight_lines, None);
+
+            let (pred_count, prey_count) = frame.counts();
+            draw_game_stats(pred_count, prey_count, frame.tick);
+
+            if graph_enabled() {
+                draw_text(
+                    "Press G for graph view",
+                    15.0,
+                    26.0,
+                    22.0,
+                    Color::from_rgba(220, 220, 220, 255),
+                );
+            }
+        }
+
+        ViewMode::Graph => {
+            // Fullscreen graph view
+            draw_population_graph_fullscreen(&pop_history,
+                 playback_state.current_frame, 
+                 total_frames);
+
+
+            let (pred_count, prey_count) = frame.counts();
+            draw_game_stats(pred_count, prey_count, frame.tick);
+        }
+    }
+
+    // Controls visible in both modes
+    draw_playback_controls(&mut playback_state, total_frames);
+
+    next_frame().await;
+}
+
     }
 }
 
@@ -534,49 +534,5 @@ mod tests {
 
         let sum: f32 = inputs.iter().sum();
         assert_eq!(sum, 0.0, "Predator should NOT see the prey outside its FOV");
-    }
-    #[test]
-    fn test_determinism_with_seed() {
-        // Create two games with the same seed
-        let mut game1 = Game::new(None, 5, 10, 50, 100);
-        let mut game2 = Game::new(None, 5, 10, 50, 100);
-
-        // Run 10 frames on both games
-        for _ in 0..10 {
-            game1.next_frame();
-            game2.next_frame();
-        }
-
-        // Verify that both games have the same number of predators and prey
-        assert_eq!(
-            game1.predator_count(),
-            game2.predator_count(),
-            "Predator counts should be identical with same seed"
-        );
-        assert_eq!(
-            game1.prey_count(),
-            game2.prey_count(),
-            "Prey counts should be identical with same seed"
-        );
-
-        // Verify that the first predator has the same position in both games
-        if !game1.predators.is_empty() && !game2.predators.is_empty() {
-            let pred1_pos = game1.predators[0].core.pos;
-            let pred2_pos = game2.predators[0].core.pos;
-            assert_eq!(
-                pred1_pos, pred2_pos,
-                "First predator position should be identical with same seed"
-            );
-        }
-
-        // Verify that the first prey has the same position in both games
-        if !game1.preys.is_empty() && !game2.preys.is_empty() {
-            let prey1_pos = game1.preys[0].core.pos;
-            let prey2_pos = game2.preys[0].core.pos;
-            assert_eq!(
-                prey1_pos, prey2_pos,
-                "First prey position should be identical with same seed"
-            );
-        }
     }
 }
