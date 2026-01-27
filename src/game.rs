@@ -3,7 +3,8 @@ use crate::data_manager::{AnimalType, DataManager, Frame, IndexedFrameReader};
 use crate::settings::{self};
 use crate::spatial_hash::SpatialHash;
 use crate::visualization::{draw_frame, draw_game_stats, draw_playback_controls, PlaybackState};
-use ::rand::Rng;
+use ::rand::rngs::StdRng;
+use ::rand::{Rng, SeedableRng};
 use macroquad::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -93,7 +94,7 @@ impl Game {
         max_preds: usize,
         max_preys: usize,
     ) -> Self {
-        let mut rng = ::rand::thread_rng();
+        let mut rng = StdRng::from_seed(settings::SEED);
 
         // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
         let predators: Vec<Predator> = (0..num_preds)
@@ -190,7 +191,7 @@ impl Game {
         // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
         let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
         let mut newborn_preds: Vec<Predator> = Vec::new();
-        let mut rng = ::rand::thread_rng();
+        let mut rng = StdRng::from_seed(settings::SEED);
 
         for pred in self.predators.iter_mut() {
             // Hunt near new position (preys haven't moved yet)
@@ -475,5 +476,49 @@ mod tests {
 
         let sum: f32 = inputs.iter().sum();
         assert_eq!(sum, 0.0, "Predator should NOT see the prey outside its FOV");
+    }
+    #[test]
+    fn test_determinism_with_seed() {
+        // Create two games with the same seed
+        let mut game1 = Game::new(None, 5, 10, 50, 100);
+        let mut game2 = Game::new(None, 5, 10, 50, 100);
+
+        // Run 10 frames on both games
+        for _ in 0..10 {
+            game1.next_frame();
+            game2.next_frame();
+        }
+
+        // Verify that both games have the same number of predators and prey
+        assert_eq!(
+            game1.predator_count(),
+            game2.predator_count(),
+            "Predator counts should be identical with same seed"
+        );
+        assert_eq!(
+            game1.prey_count(),
+            game2.prey_count(),
+            "Prey counts should be identical with same seed"
+        );
+
+        // Verify that the first predator has the same position in both games
+        if !game1.predators.is_empty() && !game2.predators.is_empty() {
+            let pred1_pos = game1.predators[0].core.pos;
+            let pred2_pos = game2.predators[0].core.pos;
+            assert_eq!(
+                pred1_pos, pred2_pos,
+                "First predator position should be identical with same seed"
+            );
+        }
+
+        // Verify that the first prey has the same position in both games
+        if !game1.preys.is_empty() && !game2.preys.is_empty() {
+            let prey1_pos = game1.preys[0].core.pos;
+            let prey2_pos = game2.preys[0].core.pos;
+            assert_eq!(
+                prey1_pos, prey2_pos,
+                "First prey position should be identical with same seed"
+            );
+        }
     }
 }

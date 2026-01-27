@@ -45,7 +45,7 @@ impl Game {
         max_preds: usize,
         max_preys: usize,
     ) -> Self {
-        let mut rng = ::rand::thread_rng();
+        let mut rng = StdRng::from_seed(settings::SEED);
 
         // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
         let predators: Vec<Predator> = (0..num_preds)
@@ -137,7 +137,7 @@ impl Game {
         // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
         let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
         let mut newborn_preds: Vec<Predator> = Vec::new();
-        let mut rng = ::rand::thread_rng();
+        let mut rng = StdRng::from_seed(settings::SEED);
 
         for pred in self.predators.iter_mut() {
             // Hunt near new position (preys haven't moved yet)

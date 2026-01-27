@@ -357,7 +357,8 @@ pub struct AnimalState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ::rand::rngs::ThreadRng;
+    use ::rand::rngs::StdRng;
+    use ::rand::SeedableRng;
 
     #[test]
     fn test_animal_state_creation() {
@@ -383,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_frame_creation_with_animals() {
-        let mut rng: ThreadRng = ::rand::thread_rng();
+        let mut rng = StdRng::from_seed(settings::SEED);
         let predator = Predator::new(10.0, 20.0, &mut rng);
         let prey = Prey::new(30.0, 40.0, &mut rng);
 
