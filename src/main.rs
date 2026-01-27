@@ -6,7 +6,7 @@ use predator_vs_prey::data_manager::AnimalType;
 use predator_vs_prey::game::Game;
 use predator_vs_prey::settings::{self, DEFAULT_DATA_FILE};
 use predator_vs_prey::visualization::{
-    draw_frame, draw_game_stats, draw_neural_network, window_conf
+    draw_frame, draw_game_stats, draw_neural_network, window_conf,
 };
 
 use macroquad::prelude::*;

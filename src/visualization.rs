@@ -6,17 +6,6 @@ use crate::brain_neural_network::NeuralNetwork;
 use crate::data_manager::{AnimalType, Frame};
 use crate::settings::{self, SCREEN_HEIGHT};
 use macroquad::prelude::*;
-
-// // for graph:
-// use std::sync::OnceLock;
-// static GRAPH_ENABLED: OnceLock<bool> = OnceLock::new();
-
-// pub fn graph_enabled() -> bool {
-//     *GRAPH_ENABLED.get_or_init(|| {
-//         std::env::args().any(|a| a == "--graph" || a == "--lv-graph")
-//     })
-// }
-
 pub const STATS_PANEL_WIDTH: i32 = 200;
 pub const PLAYBACK_CONTROLS_HEIGHT: f32 = 60.0;
 pub const NOSE_LENGTH: f32 = 6.0;
