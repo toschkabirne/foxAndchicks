@@ -14,7 +14,7 @@ use std::sync::RwLock;
 // Python: REAC = False (currently unused in your posted code)
 pub const REAC: bool = false;
 
-pub const SEED: [u8; 32] = [1; 32];
+pub const SEED: u64 = 42;
 
 // --------------------
 // game.rs settings
