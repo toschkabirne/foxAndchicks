@@ -93,7 +93,7 @@ fn move_predator_with_keyboard(pred: &mut Predator) {
 async fn main() {
     let mutations = read_mutations_from_stdin();
 
-    let mut rng = StdRng::from_seed(settings::SEED);
+    let mut rng = StdRng::seed_from_u64(settings::SEED);
 
     // Spawn entities
     let mut prey = Prey::new(
