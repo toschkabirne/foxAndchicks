@@ -2,7 +2,7 @@ use crate::animals::{wrapped_distance_abs, Predator, Prey};
 use crate::data_manager::{AnimalType, DataManager, Frame, IndexedFrameReader};
 use crate::settings::{self};
 use crate::spatial_hash::SpatialHash;
-use crate::visualization::{draw_frame, draw_game_stats, draw_playback_controls, PlaybackState};
+use crate::visualization::{draw_frame, draw_game_stats, draw_playback_controls, draw_population_graph, graph_enabled, PlaybackState};
 use ::rand::Rng;
 use macroquad::prelude::*;
 use rayon::prelude::*;
@@ -299,6 +299,17 @@ impl Game {
         println!("  Home/End: Jump to start/end");
         println!("  Click and drag slider to seek");
 
+        // only build history if the user asked for it (avoids rereading the file otherwise).
+        let pop_history: Vec<(usize, usize)> = if graph_enabled() {
+            let mut h = Vec::with_capacity(total_frames);
+            for f in DataManager::read_frames(file_name) {
+                h.push(f.counts());
+            }
+            h
+        } else {
+            Vec::new()
+        };
+
         let mut playback_state = PlaybackState::default();
         let mut accumulated_time = 0.0;
         let frame_duration = 1.0 / 60.0; // Base frame rate
@@ -347,6 +358,10 @@ impl Game {
 
             let (pred_count, prey_count) = frame.counts();
             draw_game_stats(pred_count, prey_count, frame.tick);
+            
+            if graph_enabled() {
+                draw_population_graph(&pop_history, playback_state.current_frame);
+            }
 
             draw_playback_controls(&mut playback_state, total_frames);
 

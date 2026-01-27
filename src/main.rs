@@ -6,7 +6,7 @@ use predator_vs_prey::data_manager::AnimalType;
 use predator_vs_prey::game::Game;
 use predator_vs_prey::settings::{self, DEFAULT_DATA_FILE};
 use predator_vs_prey::visualization::{
-    draw_frame, draw_game_stats, draw_neural_network, window_conf,
+    draw_frame, draw_game_stats, draw_neural_network, draw_population_graph, graph_enabled, window_conf,
 };
 
 use macroquad::prelude::*;
@@ -20,6 +20,9 @@ async fn main() {
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--no-sight" | "--no-sight-lines" => draw_sight_lines = false,
+            "--graph" | "--lv-graph" => {
+                // no-op here: visualization::graph_enabled() reads std::env::args()
+            }
             "--file" | "-f" => {
                 filename = Some(it.next().unwrap_or_else(|| DEFAULT_DATA_FILE.to_string()));
             }
@@ -60,6 +63,9 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
     let mut paused = false;
     let mut speed_multiplier: usize = 1;
     let mut frame = game.next_frame();
+
+    // Note: This empty vector is always constructed, but nothing is stored in it, if --graph isn't executed
+    let mut pop_history: Vec<(usize, usize)> = Vec::new(); // (pred, prey) per displayed frame
 
     // Run simulation with live rendering
     loop {
@@ -117,6 +123,12 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
 
         let (pred_count, prey_count) = frame.counts();
         draw_game_stats(pred_count, prey_count, game.frame_count);
+
+        // This is for --graph 
+        if graph_enabled() {
+            pop_history.push((pred_count, prey_count));
+            draw_population_graph(&pop_history, frame.tick);
+        }
 
         // Draw speed/status
         let status_x = settings::SCREEN_WIDTH as f32 + 15.0;

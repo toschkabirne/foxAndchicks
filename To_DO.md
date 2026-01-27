@@ -5,6 +5,7 @@ Make sure to quickly mark something if you are working on it. Just put your name
 ## DataManager
 
 - [ ] Also store metadata s.a. max_preds, max_preys, init_NN_weights etc.
+- [ ] When recording, always default values is chosen for num of frames, although option throug command line is given.
 
 ## Animal
 
@@ -27,7 +28,7 @@ Make sure to quickly mark something if you are working on it. Just put your name
 
 - [x] Add a slider to playback visualisation
 - [ ] Add graphs
-- [ ] toroidal wrap for spawns
+- [x] toroidal wrap for spawns
 
 ## General
 
