@@ -42,7 +42,7 @@ struct SimResult {
 }
 
 fn generate_random_params() -> Params {
-    let mut rng = StdRng::from_seed(settings::SEED);
+    let mut rng = StdRng::seed_from_u64(settings::SEED);
     Params {
         add_neuron: Some(rng.gen_range(0.01..0.9)),
         add_weight: Some(rng.gen_range(0.1..0.9)),

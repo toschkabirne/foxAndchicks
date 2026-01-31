@@ -139,7 +139,7 @@ async fn main() {
     println!("Mode: {:?}", mode);
 
     let mutations = read_mutations_from_stdin(mode);
-    let mut rng = StdRng::from_seed(settings::SEED);
+    let mut rng = StdRng::seed_from_u64(settings::SEED);
 
     let center_x = (SCREEN_WIDTH / 2) as f32;
     let center_y = (SCREEN_HEIGHT / 2) as f32;

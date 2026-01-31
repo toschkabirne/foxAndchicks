@@ -384,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_frame_creation_with_animals() {
-        let mut rng = StdRng::from_seed(settings::SEED);
+        let mut rng = StdRng::seed_from_u64(settings::SEED);
         let predator = Predator::new(10.0, 20.0, &mut rng);
         let prey = Prey::new(30.0, 40.0, &mut rng);
 
