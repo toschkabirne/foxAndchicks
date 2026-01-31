@@ -84,3 +84,52 @@ impl SpatialHash {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockPos {
+        x: f32,
+        y: f32,
+    }
+    impl HasPos for MockPos {
+        fn x(&self) -> f32 {
+            self.x
+        }
+        fn y(&self) -> f32 {
+            self.y
+        }
+        fn set_pos(&mut self, x: f32, y: f32) {
+            self.x = x;
+            self.y = y;
+        }
+    }
+
+    #[test]
+    fn test_phantom_gap_bug() {
+        // World 1000, Cell Size 150 -> 7 Cells (index 0 to 6).
+        // Grid covers 7 * 150 = 1050 units.
+        // This creates a "Phantom Gap" of 50 units in Cell 6 (900-1050).
+        let world_w = 1000.0;
+        let world_h = 1000.0;
+        let cell_size = 150;
+        let mut sh = SpatialHash::new(cell_size, world_w, world_h);
+
+        // B is at x=1.0 (Cell 0)
+        let b = MockPos { x: 1.0, y: 500.0 };
+        sh.rebuild_from(&[b]);
+
+        // Querying from x=899.0 (Cell 5)
+        // Distance (Toroidal) to B is 1 + (1000 - 899) = 102.
+        // 102 is less than the sight range (cell_size 150).
+        // SH checks Cells 4, 5, 6. But B is in Cell 0!
+        // The search misses Cell 0 because Cell 6 is "in the way".
+        let indices = sh.query(899.0, 500.0);
+
+        assert!(
+            !indices.is_empty(),
+            "BUG REPRODUCED: Neighbor at x=1 should be found from x=899 (dist 102 < 150), but SH missed it!"
+        );
+    }
+}
