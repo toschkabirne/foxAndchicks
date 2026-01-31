@@ -45,7 +45,7 @@ impl Game {
         max_preds: usize,
         max_preys: usize,
     ) -> Self {
-        let mut rng = StdRng::from_seed(settings::SEED);
+        let mut rng = StdRng::seed_from_u64(settings::SEED);
 
         // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
         let predators: Vec<Predator> = (0..num_preds)
@@ -70,7 +70,7 @@ impl Game {
 
         // Set up spatial hash
         let cell_pred =
-            ((settings::SCREEN_WIDTH as f32) / settings::PREDATOR_SIGHT_RANGE).floor() as i32;
+            ((settings::SCREEN_WIDTH as f32) / settings::PRED_SIGHT_RANGE).floor() as i32;
         let cell_prey =
             ((settings::SCREEN_WIDTH as f32) / settings::PREY_SIGHT_RANGE).floor() as i32;
 
@@ -137,7 +137,7 @@ impl Game {
         // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
         let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
         let mut newborn_preds: Vec<Predator> = Vec::new();
-        let mut rng = StdRng::from_seed(settings::SEED);
+        let mut rng = StdRng::seed_from_u64(settings::SEED);
 
         for pred in self.predators.iter_mut() {
             // Hunt near new position (preys haven't moved yet)

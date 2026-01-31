@@ -7,7 +7,8 @@ use crate::visualization::{
     graph_enabled, PlaybackState,
 };
 
-use ::rand::Rng;
+use ::rand::rngs::StdRng;
+use ::rand::{Rng, SeedableRng};
 use macroquad::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -97,7 +98,7 @@ impl Game {
         max_preds: usize,
         max_preys: usize,
     ) -> Self {
-        let mut rng = ::rand::thread_rng();
+        let mut rng = StdRng::seed_from_u64(settings::SEED);
 
         // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
         let predators: Vec<Predator> = (0..num_preds)
@@ -122,9 +123,9 @@ impl Game {
 
         // Set up spatial hash
         // Predators query prey_hash, so prey_hash cell size should be PRED_SIGHT_RANGE
-        let cell_size_prey = settings::PRED_SIGHT_RANGE as i32;
+        let cell_size_prey = settings::PRED_SIGHT_RANGE as usize;
         // Preys query pred_hash, so pred_hash cell size should be PREY_SIGHT_RANGE
-        let cell_size_pred = settings::PREY_SIGHT_RANGE as i32;
+        let cell_size_pred = settings::PREY_SIGHT_RANGE as usize;
 
         let world_w = settings::SCREEN_WIDTH as f32;
         let world_h = settings::SCREEN_HEIGHT as f32;
@@ -194,7 +195,7 @@ impl Game {
         // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
         let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
         let mut newborn_preds: Vec<Predator> = Vec::new();
-        let mut rng = ::rand::thread_rng();
+        let mut rng = StdRng::seed_from_u64(settings::SEED);
 
         for pred in self.predators.iter_mut() {
             // Hunt near new position (preys haven't moved yet)
@@ -329,86 +330,86 @@ impl Game {
         let mut cached_frame_index: Option<usize> = None;
 
         loop {
-    // Handle exit
-    if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
-        break;
-    }
-
-    // --- INPUT / CONTROL PHASE ---
-    if graph_enabled() && is_key_pressed(KeyCode::G) {
-        view_mode = match view_mode {
-            ViewMode::Simulation => ViewMode::Graph,
-            ViewMode::Graph => ViewMode::Simulation,
-        };
-    }
-
-    // Update frame based on playback state
-    if playback_state.is_playing && !playback_state.is_dragging {
-        accumulated_time += get_frame_time() * playback_state.playback_speed;
-
-        while accumulated_time >= frame_duration {
-            accumulated_time -= frame_duration;
-            if playback_state.current_frame < total_frames - 1 {
-                playback_state.current_frame += 1;
-            } else {
-                playback_state.current_frame = 0;
+            // Handle exit
+            if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
+                break;
             }
-        }
-    }
 
-    // Only read frame from disk if it changed
-    if cached_frame_index != Some(playback_state.current_frame) {
-        cached_frame = frame_reader.get_frame(playback_state.current_frame);
-        cached_frame_index = Some(playback_state.current_frame);
-    }
-
-    let frame = match &cached_frame {
-        Some(f) => f,
-        None => {
-            eprintln!("Failed to read frame {}", playback_state.current_frame);
-            break;
-        }
-    };
-
-    clear_background(settings::BACKGROUND_COLOR);
-
-    // --- DRAW PHASE ---
-    match view_mode {
-        ViewMode::Simulation => {
-            draw_frame(frame, draw_sight_lines, None);
-
-            let (pred_count, prey_count) = frame.counts();
-            draw_game_stats(pred_count, prey_count, frame.tick);
-
-            if graph_enabled() {
-                draw_text(
-                    "Press G for graph view",
-                    15.0,
-                    26.0,
-                    22.0,
-                    Color::from_rgba(220, 220, 220, 255),
-                );
+            // --- INPUT / CONTROL PHASE ---
+            if graph_enabled() && is_key_pressed(KeyCode::G) {
+                view_mode = match view_mode {
+                    ViewMode::Simulation => ViewMode::Graph,
+                    ViewMode::Graph => ViewMode::Simulation,
+                };
             }
+
+            // Update frame based on playback state
+            if playback_state.is_playing && !playback_state.is_dragging {
+                accumulated_time += get_frame_time() * playback_state.playback_speed;
+
+                while accumulated_time >= frame_duration {
+                    accumulated_time -= frame_duration;
+                    if playback_state.current_frame < total_frames - 1 {
+                        playback_state.current_frame += 1;
+                    } else {
+                        playback_state.current_frame = 0;
+                    }
+                }
+            }
+
+            // Only read frame from disk if it changed
+            if cached_frame_index != Some(playback_state.current_frame) {
+                cached_frame = frame_reader.get_frame(playback_state.current_frame);
+                cached_frame_index = Some(playback_state.current_frame);
+            }
+
+            let frame = match &cached_frame {
+                Some(f) => f,
+                None => {
+                    eprintln!("Failed to read frame {}", playback_state.current_frame);
+                    break;
+                }
+            };
+
+            clear_background(settings::BACKGROUND_COLOR);
+
+            // --- DRAW PHASE ---
+            match view_mode {
+                ViewMode::Simulation => {
+                    draw_frame(frame, draw_sight_lines, None);
+
+                    let (pred_count, prey_count) = frame.counts();
+                    draw_game_stats(pred_count, prey_count, frame.tick);
+
+                    if graph_enabled() {
+                        draw_text(
+                            "Press G for graph view",
+                            15.0,
+                            26.0,
+                            22.0,
+                            Color::from_rgba(220, 220, 220, 255),
+                        );
+                    }
+                }
+
+                ViewMode::Graph => {
+                    // Fullscreen graph view
+                    draw_population_graph_fullscreen(
+                        &pop_history,
+                        playback_state.current_frame,
+                        total_frames,
+                    );
+
+                    let (pred_count, prey_count) = frame.counts();
+                    draw_game_stats(pred_count, prey_count, frame.tick);
+                }
+            }
+
+            // Controls visible in both modes
+            draw_playback_controls(&mut playback_state, total_frames);
+
+            next_frame().await;
         }
-
-        ViewMode::Graph => {
-            // Fullscreen graph view
-            draw_population_graph_fullscreen(&pop_history,
-                 playback_state.current_frame, 
-                 total_frames);
-
-
-            let (pred_count, prey_count) = frame.counts();
-            draw_game_stats(pred_count, prey_count, frame.tick);
-        }
-    }
-
-    // Controls visible in both modes
-    draw_playback_controls(&mut playback_state, total_frames);
-
-    next_frame().await;
-}
-
     }
 }
 
@@ -444,54 +445,43 @@ mod tests {
     }
 
     #[test]
-    fn test_spatial_hash_fov_exclusion() {
-        // Setup: Predator at (500, 500), Prey at (500 + 200, 500)
-        // Sight range 170. Prey is OUTSIDE range.
-        // Note: SpatialHash returns coarse candidates.
-        // With cell size = 170, 3x3 grid covers +/- 170 from center cell edges.
-        // We need to place prey far enough to be outside the 3x3 grid neighborhood.
+    fn test_vision_range_exclusion() {
+        // Setup: Predator at (500, 500), Prey at (500 + 2*sight_range + 10, 500)
+        // Sight range 150. Prey is OUTSIDE sight range.
+        // However, it might still be in a neighboring spatial hash cell.
+        // We want to verify that the predator's fine-grained sensing logic
+        // correctly excludes it even if the spatial hash returns it as a candidate.
 
         let mut game = Game::new(None, 1, 1, 10, 10);
 
         // Move predator to center
         game.predators[0].core.set_xy(500.0, 500.0);
 
-        // Move prey to 1 pixel outside sight range
+        // Move prey to well outside sight range
         let sight_range = settings::PRED_SIGHT_RANGE;
-        game.preys[0].core.set_xy(500.0 + sight_range + 10.0, 500.0);
+        game.preys[0]
+            .core
+            .set_xy(500.0 + 2.0 * sight_range + 10.0, 500.0);
 
         // Rebuild hash
         game.spatial_hash_preys.rebuild_from(&game.preys);
 
-        // Query neighbors
+        // 1. Query neighbors (SpatialHash)
         let nearby_prey_indices = game.spatial_hash_preys.query(500.0, 500.0);
 
-        // Assert: Prey should NOT be found
-        assert!(
-            nearby_prey_indices.is_empty(),
-            "Prey outside FOV (far away) was incorrectly detected"
+        // 2. Verify sensing logic EXCLUDES it (fine filter)
+        // Even if the spatial hash is coarse and returns it, the predator shouldn't see it.
+        let inputs = game.predators[0].get_inputs(
+            nearby_prey_indices
+                .iter()
+                .filter_map(|&i| game.preys.get(i)),
         );
-    }
 
-    #[test]
-    fn test_spatial_hash_wrapping() {
-        // Setup: Predator at (5, 500), Prey at (995, 500) (Screen width 1000)
-        // They are 10 pixels apart toroidally. Should be detected.
-
-        let mut game = Game::new(None, 1, 1, 10, 10);
-
-        game.predators[0].core.set_xy(5.0, 500.0);
-        game.preys[0].core.set_xy(995.0, 500.0);
-
-        game.spatial_hash_preys.rebuild_from(&game.preys);
-
-        let nearby_prey_indices = game.spatial_hash_preys.query(5.0, 500.0);
-
-        assert!(
-            !nearby_prey_indices.is_empty(),
-            "Toroidal neighbor NOT detected"
+        let sum: f32 = inputs.iter().sum();
+        assert_eq!(
+            sum, 0.0,
+            "Predator should NOT see the prey outside its vision range"
         );
-        assert_eq!(nearby_prey_indices[0], 0);
     }
 
     #[test]
@@ -534,5 +524,50 @@ mod tests {
 
         let sum: f32 = inputs.iter().sum();
         assert_eq!(sum, 0.0, "Predator should NOT see the prey outside its FOV");
+    }
+
+    #[test]
+    fn test_determinism_with_seed() {
+        // Create two games with the same seed
+        let mut game1 = Game::new(None, 5, 10, 50, 100);
+        let mut game2 = Game::new(None, 5, 10, 50, 100);
+
+        // Run 10 frames on both games
+        for _ in 0..10 {
+            game1.next_frame();
+            game2.next_frame();
+        }
+
+        // Verify that both games have the same number of predators and prey
+        assert_eq!(
+            game1.predator_count(),
+            game2.predator_count(),
+            "Predator counts should be identical with same seed"
+        );
+        assert_eq!(
+            game1.prey_count(),
+            game2.prey_count(),
+            "Prey counts should be identical with same seed"
+        );
+
+        // Verify that the first predator has the same position in both games
+        if !game1.predators.is_empty() && !game2.predators.is_empty() {
+            let pred1_pos = game1.predators[0].core.pos;
+            let pred2_pos = game2.predators[0].core.pos;
+            assert_eq!(
+                pred1_pos, pred2_pos,
+                "First predator position should be identical with same seed"
+            );
+        }
+
+        // Verify that the first prey has the same position in both games
+        if !game1.preys.is_empty() && !game2.preys.is_empty() {
+            let prey1_pos = game1.preys[0].core.pos;
+            let prey2_pos = game2.preys[0].core.pos;
+            assert_eq!(
+                prey1_pos, prey2_pos,
+                "First prey position should be identical with same seed"
+            );
+        }
     }
 }

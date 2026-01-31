@@ -6,7 +6,7 @@ use predator_vs_prey::data_manager::AnimalType;
 use predator_vs_prey::game::Game;
 use predator_vs_prey::settings::{self, DEFAULT_DATA_FILE};
 use predator_vs_prey::visualization::{
-    draw_frame, draw_game_stats, draw_neural_network, window_conf,
+    draw_frame, draw_game_stats, draw_neural_network, draw_population_graph_fullscreen_live, graph_enabled, window_conf,
 };
 
 use macroquad::prelude::*;
@@ -54,6 +54,13 @@ async fn main() {
 }
 
 async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
+    println!("Controls:");
+    println!("  Space: Pause/Resume");
+    println!("  Up/Down Arrow: Increase/decrease speed");
+    println!("  0: Reset speed to 1x");
+    println!("  Escape: Quit");
+    println!("  Click on animal: Select to view neural network");
+
     let mut game = Game::new_default(filename);
     let mut selected_animal: Option<(AnimalType, usize)> = None;
 
@@ -61,27 +68,46 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
     let mut speed_multiplier: usize = 1;
     let mut frame = game.next_frame();
 
+    //Simulation and graph mode for --graph:
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum ViewMode {
+        Simulation,
+        Graph,
+    }
+
+    let graph_on = graph_enabled();
+    let mut view_mode = ViewMode::Simulation;
+
+    // Only used if --graph is set
+    let mut pop_history: Vec<(usize, usize)> = Vec::new();
+
     // Run simulation with live rendering
     loop {
         clear_background(settings::BACKGROUND_COLOR);
 
         // Handle inputs
-        if is_key_pressed(KeyCode::P) {
+        if is_key_pressed(KeyCode::Space) {
             paused = !paused;
         }
 
-        if is_key_pressed(KeyCode::Equal) || is_key_pressed(KeyCode::KpAdd) {
+        if is_key_pressed(KeyCode::Up) {
             speed_multiplier += 1;
         }
 
-        if (is_key_pressed(KeyCode::Minus) || is_key_pressed(KeyCode::KpSubtract))
-            && speed_multiplier > 1
-        {
+        if is_key_pressed(KeyCode::Down) && speed_multiplier > 1 {
             speed_multiplier -= 1;
         }
 
         if is_key_pressed(KeyCode::Key0) || is_key_pressed(KeyCode::Kp0) {
             speed_multiplier = 1;
+        }
+
+        // Switch key for graph mode:
+        if graph_on && is_key_pressed(KeyCode::G) {
+            view_mode = match view_mode {
+                ViewMode::Simulation => ViewMode::Graph,
+                ViewMode::Graph => ViewMode::Simulation,
+            };
         }
 
         // Update physics
@@ -103,20 +129,54 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
             }
         }
 
-        draw_frame(&frame, draw_sight_lines, selected_animal);
+      let (pred_count, prey_count) = frame.counts();
 
-        // Draw neural network of selected animal
-        if let Some((atype, id)) = selected_animal {
-            if let Some(brain) = game.get_animal_brain(atype, id) {
-                draw_neural_network(brain, 10.0, 10.0, 240.0, 320.0);
-            } else {
-                // Selected animal has died (or was removed)
-                selected_animal = None;
+        // Collect data ONLY if graph is enabled
+        if graph_on {
+            pop_history.push((pred_count, prey_count));
+        }
+
+        match view_mode {
+            ViewMode::Simulation => {
+                // Mouse selection only in simulation view
+                if is_mouse_button_pressed(MouseButton::Left) {
+                    let (mx, my) = mouse_position();
+                    if let Some(target) = game.get_closest_animal_at(mx, my) {
+                        selected_animal = Some(target);
+                    } else {
+                        selected_animal = None;
+                    }
+                }
+
+                draw_frame(&frame, draw_sight_lines, selected_animal);
+
+                if let Some((atype, id)) = selected_animal {
+                    if let Some(brain) = game.get_animal_brain(atype, id) {
+                        draw_neural_network(brain, 10.0, 10.0, 240.0, 320.0);
+                    } else {
+                        selected_animal = None;
+                    }
+                }
+
+                draw_game_stats(pred_count, prey_count, game.frame_count);
+
+                if graph_on {
+                    draw_text(
+                        "Press G for graph view",
+                        15.0,
+                        26.0,
+                        22.0,
+                        Color::from_rgba(220, 220, 220, 255),
+                    );
+                }
+            }
+
+            ViewMode::Graph => {
+                draw_population_graph_fullscreen_live(&pop_history);
+                draw_game_stats(pred_count, prey_count, game.frame_count);
             }
         }
 
-        let (pred_count, prey_count) = frame.counts();
-        draw_game_stats(pred_count, prey_count, game.frame_count);
 
         // Draw speed/status
         let status_x = settings::SCREEN_WIDTH as f32 + 15.0;
