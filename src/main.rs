@@ -54,6 +54,13 @@ async fn main() {
 }
 
 async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
+    println!("Controls:");
+    println!("  Space: Pause/Resume");
+    println!("  Up/Down Arrow: Increase/decrease speed");
+    println!("  0: Reset speed to 1x");
+    println!("  Escape: Quit");
+    println!("  Click on animal: Select to view neural network");
+
     let mut game = Game::new_default(filename);
     let mut selected_animal: Option<(AnimalType, usize)> = None;
 
@@ -79,17 +86,15 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
         clear_background(settings::BACKGROUND_COLOR);
 
         // Handle inputs
-        if is_key_pressed(KeyCode::P) {
+        if is_key_pressed(KeyCode::Space) {
             paused = !paused;
         }
 
-        if is_key_pressed(KeyCode::Equal) || is_key_pressed(KeyCode::KpAdd) {
+        if is_key_pressed(KeyCode::Up) {
             speed_multiplier += 1;
         }
 
-        if (is_key_pressed(KeyCode::Minus) || is_key_pressed(KeyCode::KpSubtract))
-            && speed_multiplier > 1
-        {
+        if is_key_pressed(KeyCode::Down) && speed_multiplier > 1 {
             speed_multiplier -= 1;
         }
 
