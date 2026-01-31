@@ -10,39 +10,68 @@ pub trait HasPos {
 /// from O(n) to O(1) average case. This is critical for performance when checking:
 #[derive(Clone)]
 pub struct SpatialHash {
-    /// Size of a cell in pixels
-    pub cell_size: i32,
+    /// Size of a cell in pixels (requested)
+    pub cell_size: usize,
     /// Storage for indices into a Vec<T>
-    pub cells: HashMap<(i32, i32), Vec<usize>>,
+    pub cells: HashMap<(usize, usize), Vec<usize>>,
     /// Number of cells in x direction (needed for toroidal wrapping)
-    pub num_cells_x: i32,
+    pub num_cells_x: usize,
     /// Number of cells in y direction (needed for toroidal wrapping)
-    pub num_cells_y: i32,
+    pub num_cells_y: usize,
+    /// World dimensions
+    pub world_width: f32,
+    pub world_height: f32,
 }
 
 impl SpatialHash {
-    pub fn new(cell_size: i32, world_width: f32, world_height: f32) -> Self {
-        let cell_size = cell_size.max(1);
+    pub fn new(cell_size: usize, world_width: f32, world_height: f32) -> Self {
+        assert!(cell_size > 0, "Cell size must be positive");
+        assert!(world_width > 0.0, "World width must be positive");
+        assert!(world_height > 0.0, "World height must be positive");
+
+        // Cell size must be smaller than world width and height
+        assert!(
+            cell_size <= world_width as usize,
+            "Cell size must be smaller than world width"
+        );
+        assert!(
+            cell_size <= world_height as usize,
+            "Cell size must be smaller than world height"
+        );
+
+        // Calculate number of cells such that each cell is AT LEAST cell_size
+        // This ensures a 3x3 neighborhood search always covers a radius of cell_size.
+        let num_cells_x = (world_width / cell_size as f32).floor() as usize;
+        let num_cells_y = (world_height / cell_size as f32).floor() as usize;
+
+        // Ensure at least one cell
+        let num_cells_x = num_cells_x.max(1);
+        let num_cells_y = num_cells_y.max(1);
+
         Self {
             cell_size,
             cells: HashMap::new(),
-            num_cells_x: (world_width / cell_size as f32).ceil() as i32,
-            num_cells_y: (world_height / cell_size as f32).ceil() as i32,
+            num_cells_x,
+            num_cells_y,
+            world_width,
+            world_height,
         }
     }
 
     #[inline]
-    fn hash(&self, x: f32, y: f32) -> (i32, i32) {
-        let cx = (x / self.cell_size as f32).floor() as i32;
-        let cy = (y / self.cell_size as f32).floor() as i32;
-        // Wrap cell coordinates for toroidal world
-        (
-            cx.rem_euclid(self.num_cells_x),
-            cy.rem_euclid(self.num_cells_y),
-        )
+    fn hash(&self, x: f32, y: f32) -> (usize, usize) {
+        // Wrap coordinates to [0, world_size) first. This handles x=world_width and negative x.
+        let x = x.rem_euclid(self.world_width);
+        let y = y.rem_euclid(self.world_height);
+
+        let cx = (x / (self.world_width / self.num_cells_x as f32)).floor() as usize;
+        let cy = (y / (self.world_height / self.num_cells_y as f32)).floor() as usize;
+
+        // Final modulo safety
+        (cx % self.num_cells_x, cy % self.num_cells_y)
     }
 
-    /// Insert an object index at a given position (position is passed in so hash doesn't need the slice).
+    /// Insert an object index at a given position.
     #[inline]
     pub fn insert_at(&mut self, idx: usize, x: f32, y: f32) {
         let cell = self.hash(x, y);
@@ -67,21 +96,21 @@ impl SpatialHash {
     pub fn clear(&mut self) {
         self.cells.clear();
     }
-}
 
-/// Fill `out` with indices in the 3x3 neighbor cells around (x,y).
-/// Reuses capacity of `out` to avoid allocations in the hot loop.
-/// Uses toroidal wrapping so cells at world edges can see across borders.
-impl SpatialHash {
+    /// Fill `out` with indices in the 3x3 neighbor cells around (x,y).
+    /// Reuses capacity of `out` to avoid allocations in the hot loop.
+    /// Uses toroidal wrapping so cells at world edges can see across borders.
     pub fn query_into(&self, out: &mut Vec<usize>, x: f32, y: f32) {
         out.clear();
         let cell = self.hash(x, y);
 
-        for dx in [-1, 0, 1] {
-            for dy in [-1, 0, 1] {
+        for dx in -1..=1 {
+            for dy in -1..=1 {
                 // Wrap cell coordinates for toroidal world
-                let wrapped_x = (cell.0 + dx).rem_euclid(self.num_cells_x);
-                let wrapped_y = (cell.1 + dy).rem_euclid(self.num_cells_y);
+                let wrapped_x =
+                    (cell.0 as isize + dx).rem_euclid(self.num_cells_x as isize) as usize;
+                let wrapped_y =
+                    (cell.1 as isize + dy).rem_euclid(self.num_cells_y as isize) as usize;
                 let neighbor_cell = (wrapped_x, wrapped_y);
                 if let Some(list) = self.cells.get(&neighbor_cell) {
                     out.extend(list.iter().copied());
@@ -371,6 +400,82 @@ mod tests {
         assert!(
             !nearby.is_empty(),
             "Object at x=WorldWidth should wrap to 0"
+        );
+    }
+    #[test]
+    fn test_phantom_gap_x() {
+        // World 1000, Cell Size 150 -> 7 Cells (index 0 to 6).
+        // Grid covers 7 * 150 = 1050 units.
+        // This creates a "Phantom Gap" of 50 units in Cell 6 (900-1050).
+        let world_w = 1000.0;
+        let world_h = 1000.0;
+        let cell_size = 150;
+        let mut sh = SpatialHash::new(cell_size, world_w, world_h);
+
+        // B is at x=1.0 (Cell 0)
+        let b = TestPoint { x: 1.0, y: 500.0 };
+        sh.rebuild_from(&[b]);
+
+        // Querying from x=899.0 (Cell 5)
+        // Distance (Toroidal) to B is 1 + (1000 - 899) = 102.
+        // 102 is less than the sight range (cell_size 150).
+        // SH checks Cells 4, 5, 6. But B is in Cell 0!
+        // The search misses Cell 0 because Cell 6 is "in the way".
+        let indices = sh.query(899.0, 500.0);
+
+        assert!(
+            !indices.is_empty(),
+            "Neighbor at x=1 should be found from x=899 (dist 102 < 150), but SH missed it!"
+        );
+    }
+
+    #[test]
+    fn test_phantom_gap_y() {
+        let world_w = 1000.0;
+        let world_h = 1000.0;
+        let cell_size = 150;
+        let mut sh = SpatialHash::new(cell_size, world_w, world_h);
+
+        // B is at y=1.0 (Cell 0)
+        let b = TestPoint { x: 500.0, y: 1.0 };
+        sh.rebuild_from(&[b]);
+
+        // Querying from y=850.
+        // Toroidal distance to B is 1 + (1000 - 850) = 151.
+        let indices = sh.query(500.0, 850.0);
+
+        assert!(
+            !indices.is_empty(),
+            "Neighbor at y=1 should be found from y=850"
+        );
+    }
+
+    #[test]
+    fn test_non_square_world() {
+        let world_w = 1200.0;
+        let world_h = 800.0;
+        let cell_size = 200;
+        let mut sh = SpatialHash::new(cell_size, world_w, world_h);
+
+        assert_eq!(sh.num_cells_x, 6);
+        assert_eq!(sh.num_cells_y, 4);
+
+        // Width wrap
+        let p1 = TestPoint { x: 5.0, y: 400.0 };
+        sh.rebuild_from(&[p1]);
+        let nearby_x = sh.query(1195.0, 400.0);
+        assert!(
+            !nearby_x.is_empty(),
+            "Width wrap failed on non-square world"
+        );
+
+        // Height wrap
+        let p2 = TestPoint { x: 600.0, y: 5.0 };
+        sh.rebuild_from(&[p2]);
+        let nearby_y = sh.query(600.0, 795.0);
+        assert!(
+            !nearby_y.is_empty(),
+            "Height wrap failed on non-square world"
         );
     }
 }
