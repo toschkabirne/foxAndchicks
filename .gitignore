@@ -13,3 +13,5 @@ src/old_animals.rs
 Presentation_Notes.txt
 /simulations
 DOCUMENTATION_SUMMARY.md
+benchmark_results.md
+benchmark_results.csv

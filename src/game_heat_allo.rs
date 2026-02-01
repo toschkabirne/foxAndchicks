@@ -6,7 +6,8 @@ use crate::data_manager::{DataManager, Frame, IndexedFrameReader};
 use crate::settings::{self};
 use crate::spatial_hash::SpatialHash;
 use crate::visualization::{draw_frame, draw_game_stats, draw_playback_controls, PlaybackState};
-use ::rand::Rng;
+use ::rand::rngs::StdRng;
+use ::rand::{Rng, SeedableRng};
 use macroquad::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -20,7 +21,8 @@ pub struct Game {
     spatial_hash_preys: SpatialHash,
     max_predators: usize,
     max_preys: usize,
-    data_manager: DataManager,
+    pub data_manager: Option<DataManager>,
+    scratch_idxs: Vec<usize>,
 }
 
 impl Game {
@@ -30,16 +32,16 @@ impl Game {
     pub fn prey_count(&self) -> usize {
         self.preys.len()
     }
-    /// Returns the actual filename (with timestamp) used for storing data
-    pub fn get_data_filename(&self) -> &str {
-        &self.data_manager.filename
+    /// Returns the actual filename (with timestamp) used for storing data, if any
+    pub fn get_data_filename(&self) -> Option<&str> {
+        self.data_manager.as_ref().map(|dm| dm.filename.as_str())
     }
 }
 
 impl Game {
     /// Creates a new Game with custom parameters
     pub fn new(
-        file_name: &str,
+        file_name: Option<&str>,
         num_preds: usize,
         num_preys: usize,
         max_preds: usize,
@@ -69,18 +71,18 @@ impl Game {
             .collect();
 
         // Set up spatial hash
-        let cell_pred =
-            ((settings::SCREEN_WIDTH as f32) / settings::PRED_SIGHT_RANGE).floor() as i32;
-        let cell_prey =
-            ((settings::SCREEN_WIDTH as f32) / settings::PREY_SIGHT_RANGE).floor() as i32;
+        // Predators query prey_hash, so prey_hash cell size should be PRED_SIGHT_RANGE
+        let cell_size_prey = settings::PRED_SIGHT_RANGE as usize;
+        // Preys query pred_hash, so pred_hash cell size should be PREY_SIGHT_RANGE
+        let cell_size_pred = settings::PREY_SIGHT_RANGE as usize;
 
         let world_w = settings::SCREEN_WIDTH as f32;
         let world_h = settings::SCREEN_HEIGHT as f32;
 
-        let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_pred, world_w, world_h);
-        let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_prey, world_w, world_h);
+        let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_size_pred, world_w, world_h);
+        let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_size_prey, world_w, world_h);
 
-        let data_manager: DataManager = DataManager::new(file_name);
+        let data_manager = file_name.map(|name| DataManager::new(name));
 
         Game {
             frame_count: 0,
@@ -91,11 +93,12 @@ impl Game {
             max_predators: max_preds,
             max_preys: max_preys,
             data_manager,
+            scratch_idxs: Vec::new(),
         }
     }
 
     /// Creates a new Game with default settings
-    pub fn new_default(file_name: &str) -> Self {
+    pub fn new_default(file_name: Option<&str>) -> Self {
         Game::new(
             file_name,
             settings::PRED_INIT_NUMB,
@@ -209,7 +212,9 @@ impl Game {
 
     pub fn calculate_and_store_next_frame(&mut self) {
         let frame = self.next_frame();
-        self.data_manager.store_frame(&frame);
+        if let Some(ref mut dm) = self.data_manager {
+            dm.store_frame(&frame);
+        }
     }
 
     pub async fn playback(file_name: &str, draw_sight_lines: bool) {

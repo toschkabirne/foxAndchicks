@@ -389,8 +389,11 @@ impl Predator {
         let speed_factor = outputs[0].clamp(0.0, 1.0);
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
 
-        assert!(speed_factor >= 0.0 && speed_factor <= 1.0);
-        assert!(turn_delta >= -MAX_TURN_ANGLE && turn_delta <= MAX_TURN_ANGLE);
+        let threshold = 0.05;
+        // threshold for moving, and if low on energy, stop moving, gain energy
+        if speed_factor < threshold {
+            return; // Dont move under treshhold
+        }
 
         // Apply movement (includes additional energy cost)
         move_with_speed_factor(
@@ -618,8 +621,6 @@ impl Prey {
         assert!(energy_ratio >= 0.0 && energy_ratio <= 1.0);
 
         let speed_factor = outputs[0].clamp(0.0, 1.0);
-
-        assert!(speed_factor >= 0.0 && speed_factor <= 1.0);
 
         // *THIS CAN BE ADAPTED*
         let threshold = 0.1;
