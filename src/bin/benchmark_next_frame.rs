@@ -44,9 +44,9 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let output_file =
         parse_arg_str(&args, "--output").unwrap_or_else(|| "benchmark_results".to_string());
-    let iterations: usize = parse_arg(&args, "--iterations").unwrap_or(50);
+    let iterations: usize = parse_arg(&args, "--iterations").unwrap_or(10);
     let warmup: usize = parse_arg(&args, "--warmup").unwrap_or(5);
-    let frames_per_iter: usize = parse_arg(&args, "--frames").unwrap_or(2000);
+    let frames_per_iter: usize = parse_arg(&args, "--frames").unwrap_or(1000);
 
     // Population configurations to test (predators, prey = 5x predators)
     let configs: Vec<(usize, usize)> = vec![
