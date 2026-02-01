@@ -17,6 +17,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 // GLOBAL STATE AND CONSTANTS
 // ============================================================================
 
+const THRESHOLD_PRED: f32 = 0.05;
+const THRESHOLD_PREY: f32 = 0.06;
 /// Global counter for assigning unique IDs to animals, needed for tracking during hunting, reproduction, and data collection
 static NEXT_ID: AtomicUsize = AtomicUsize::new(1); // thread-safe ID generation
 
@@ -389,7 +391,7 @@ impl Predator {
         let speed_factor = outputs[0].clamp(0.0, 1.0);
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
 
-        let threshold = 0.05;
+        let threshold = THRESHOLD_PRED;
         // threshold for moving, and if low on energy, stop moving, gain energy
         if speed_factor < threshold {
             return; // Dont move under treshhold
@@ -623,7 +625,7 @@ impl Prey {
         let speed_factor = outputs[0].clamp(0.0, 1.0);
 
         // *THIS CAN BE ADAPTED*
-        let threshold = 0.6;
+        let threshold = THRESHOLD_PREY;
         // threshold for moving, and if low on energy, stop moving, gain energy
         if speed_factor < threshold || self.core.energy < 0.02 * PREY_ENERGY {
             // moving threshold, rests and gains energy

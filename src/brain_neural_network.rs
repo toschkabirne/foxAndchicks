@@ -24,7 +24,7 @@ const FULLY_CONNECTED: bool = false;
 /// Design rationale: Sigmoid squashes values to (0, 1) range. The parameters
 /// (a = 1.5, b = 0.0) control steepness and offset.
 pub fn sigmoid(x: f32) -> f32 {
-    let a = 6.0; // steepness of curve
+    let a = 3.0; // steepness of curve
     let b = 3.0; // offset of curve
     1.0 / (1.0 + (-x * a + b).exp())
 }
@@ -38,6 +38,11 @@ pub fn re_ac(x: f32) -> f32 {
 ///
 /// Design rationale: tanh squashes to (-1, 1) range
 pub fn act_func(x: f32) -> f32 {
+    let a = 1.5;
+    act_tanh(a * x)
+}
+
+pub fn act_tanh(x: f32) -> f32 {
     x.tanh()
 }
 
