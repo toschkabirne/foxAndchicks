@@ -329,86 +329,86 @@ impl Game {
         let mut cached_frame_index: Option<usize> = None;
 
         loop {
-    // Handle exit
-    if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
-        break;
-    }
-
-    // --- INPUT / CONTROL PHASE ---
-    if graph_enabled() && is_key_pressed(KeyCode::G) {
-        view_mode = match view_mode {
-            ViewMode::Simulation => ViewMode::Graph,
-            ViewMode::Graph => ViewMode::Simulation,
-        };
-    }
-
-    // Update frame based on playback state
-    if playback_state.is_playing && !playback_state.is_dragging {
-        accumulated_time += get_frame_time() * playback_state.playback_speed;
-
-        while accumulated_time >= frame_duration {
-            accumulated_time -= frame_duration;
-            if playback_state.current_frame < total_frames - 1 {
-                playback_state.current_frame += 1;
-            } else {
-                playback_state.current_frame = 0;
+            // Handle exit
+            if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
+                break;
             }
-        }
-    }
 
-    // Only read frame from disk if it changed
-    if cached_frame_index != Some(playback_state.current_frame) {
-        cached_frame = frame_reader.get_frame(playback_state.current_frame);
-        cached_frame_index = Some(playback_state.current_frame);
-    }
-
-    let frame = match &cached_frame {
-        Some(f) => f,
-        None => {
-            eprintln!("Failed to read frame {}", playback_state.current_frame);
-            break;
-        }
-    };
-
-    clear_background(settings::BACKGROUND_COLOR);
-
-    // --- DRAW PHASE ---
-    match view_mode {
-        ViewMode::Simulation => {
-            draw_frame(frame, draw_sight_lines, None);
-
-            let (pred_count, prey_count) = frame.counts();
-            draw_game_stats(pred_count, prey_count, frame.tick);
-
-            if graph_enabled() {
-                draw_text(
-                    "Press G for graph view",
-                    15.0,
-                    26.0,
-                    22.0,
-                    Color::from_rgba(220, 220, 220, 255),
-                );
+            // --- INPUT / CONTROL PHASE ---
+            if graph_enabled() && is_key_pressed(KeyCode::G) {
+                view_mode = match view_mode {
+                    ViewMode::Simulation => ViewMode::Graph,
+                    ViewMode::Graph => ViewMode::Simulation,
+                };
             }
+
+            // Update frame based on playback state
+            if playback_state.is_playing && !playback_state.is_dragging {
+                accumulated_time += get_frame_time() * playback_state.playback_speed;
+
+                while accumulated_time >= frame_duration {
+                    accumulated_time -= frame_duration;
+                    if playback_state.current_frame < total_frames - 1 {
+                        playback_state.current_frame += 1;
+                    } else {
+                        playback_state.current_frame = 0;
+                    }
+                }
+            }
+
+            // Only read frame from disk if it changed
+            if cached_frame_index != Some(playback_state.current_frame) {
+                cached_frame = frame_reader.get_frame(playback_state.current_frame);
+                cached_frame_index = Some(playback_state.current_frame);
+            }
+
+            let frame = match &cached_frame {
+                Some(f) => f,
+                None => {
+                    eprintln!("Failed to read frame {}", playback_state.current_frame);
+                    break;
+                }
+            };
+
+            clear_background(settings::BACKGROUND_COLOR);
+
+            // --- DRAW PHASE ---
+            match view_mode {
+                ViewMode::Simulation => {
+                    draw_frame(frame, draw_sight_lines, None);
+
+                    let (pred_count, prey_count) = frame.counts();
+                    draw_game_stats(pred_count, prey_count, frame.tick);
+
+                    if graph_enabled() {
+                        draw_text(
+                            "Press G for graph view",
+                            15.0,
+                            26.0,
+                            22.0,
+                            Color::from_rgba(220, 220, 220, 255),
+                        );
+                    }
+                }
+
+                ViewMode::Graph => {
+                    // Fullscreen graph view
+                    draw_population_graph_fullscreen(
+                        &pop_history,
+                        playback_state.current_frame,
+                        total_frames,
+                    );
+
+                    let (pred_count, prey_count) = frame.counts();
+                    draw_game_stats(pred_count, prey_count, frame.tick);
+                }
+            }
+
+            // Controls visible in both modes
+            draw_playback_controls(&mut playback_state, total_frames);
+
+            next_frame().await;
         }
-
-        ViewMode::Graph => {
-            // Fullscreen graph view
-            draw_population_graph_fullscreen(&pop_history,
-                 playback_state.current_frame, 
-                 total_frames);
-
-
-            let (pred_count, prey_count) = frame.counts();
-            draw_game_stats(pred_count, prey_count, frame.tick);
-        }
-    }
-
-    // Controls visible in both modes
-    draw_playback_controls(&mut playback_state, total_frames);
-
-    next_frame().await;
-}
-
     }
 }
 
