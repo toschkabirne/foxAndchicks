@@ -1,0 +1,19 @@
+{
+  "survived": true,
+  "steps": 20000,
+  "avg_step_time": 0.00354080919165,
+  "final_predators": 47,
+  "final_preys": 400,
+  "parameters": {
+    "ADD_NEURON": 0.15,
+    "ADD_WEIGHT": 0.6,
+    "CHANGE_WEIGHT": 0.6,
+    "MAX_PRED_COUNT": 600,
+    "MAX_PREY_COUNT": 2400,
+    "PRED_INIT_MUT": 40,
+    "PRED_INIT_NUMB": 100,
+    "PREY_INIT_MUT": 40,
+    "PREY_INIT_NUMB": 400
+  },
+  "error": null
+}
