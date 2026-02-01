@@ -46,17 +46,10 @@ fn main() {
         parse_arg_str(&args, "--output").unwrap_or_else(|| "benchmark_results".to_string());
     let iterations: usize = parse_arg(&args, "--iterations").unwrap_or(10);
     let warmup: usize = parse_arg(&args, "--warmup").unwrap_or(5);
-    let frames_per_iter: usize = parse_arg(&args, "--frames").unwrap_or(1000);
+    let frames_per_iter: usize = parse_arg(&args, "--frames").unwrap_or(500);
 
     // Population configurations to test (predators, prey = 5x predators)
-    let configs: Vec<(usize, usize)> = vec![
-        (10, 50),
-        (30, 150),
-        (50, 250),
-        (100, 400),
-        (200, 800),
-        (400, 1600),
-    ];
+    let configs: Vec<(usize, usize)> = vec![(10, 50), (30, 150), (50, 250), (150, 700)];
 
     println!("╔══════════════════════════════════════════════════════════════════╗");
     println!("║     Performance Benchmark: Heap Allocation vs Scratch Vector     ║");
