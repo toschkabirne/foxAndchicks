@@ -1,5 +1,4 @@
 use crate::settings::*;
-use ::rand::Rng;
 use macroquad::prelude::*;
 use std::env;
 use std::io::{self, Write};
@@ -8,6 +7,9 @@ use predator_vs_prey::animals::{wrapped_distance_abs, AnimalCore, Predator, Prey
 use predator_vs_prey::brain_neural_network::NeuralNetwork;
 use predator_vs_prey::visualization::draw_neural_network;
 use predator_vs_prey::*;
+
+use ::rand::rngs::StdRng;
+use ::rand::{Rng, SeedableRng};
 
 fn window_conf() -> Conf {
     Conf {
@@ -137,7 +139,7 @@ async fn main() {
     println!("Mode: {:?}", mode);
 
     let mutations = read_mutations_from_stdin(mode);
-    let mut rng = ::rand::thread_rng();
+    let mut rng = StdRng::seed_from_u64(settings::SEED);
 
     let center_x = (SCREEN_WIDTH / 2) as f32;
     let center_y = (SCREEN_HEIGHT / 2) as f32;

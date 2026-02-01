@@ -37,3 +37,17 @@ Make sure to quickly mark something if you are working on it. Just put your name
 - [ ] Add a lot of asserts (they verify that the code is correct and Prof. Koch likes them) 
 - [ ] Check TODOs together
 
+# Writing
+- [ ] Decide on the structure of the report
+- [ ] Distribute the work for the report
+
+## Topics (I just scribbled down my thoughts)
+- [ ] Testing
+- [ ] Spatial Hashing
+- [ ] Toroidal World
+- [ ] Literature Review
+- [ ] General Setup
+- [ ] Parallelism
+- [ ] Simulation results
+- [ ] Software Structure
+- [ ] Profiling

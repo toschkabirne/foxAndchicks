@@ -1,5 +1,7 @@
+use ::rand::rngs::StdRng;
+use ::rand::{Rng, SeedableRng};
 use colored::*;
-use rand::Rng;
+use predator_vs_prey::settings;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -40,7 +42,7 @@ struct SimResult {
 }
 
 fn generate_random_params() -> Params {
-    let mut rng = rand::thread_rng();
+    let mut rng = StdRng::seed_from_u64(settings::SEED);
     Params {
         add_neuron: Some(rng.gen_range(0.01..0.9)),
         add_weight: Some(rng.gen_range(0.1..0.9)),
