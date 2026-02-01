@@ -17,3 +17,4 @@ benchmark_results.md
 benchmark_results.csv
 nn_signal_analysis.md
 nn_signal_analysis.csv
+/.venv
