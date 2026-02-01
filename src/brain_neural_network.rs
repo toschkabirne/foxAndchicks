@@ -17,7 +17,7 @@ use rand::Rng;
 // These functions transform neuron activations, introducing non-linearity
 // which is essential for neural networks to learn complex behaviors.
 // ============================================================================
-
+const WEIGHT: f32 = 0.3;
 const FULLY_CONNECTED: bool = false;
 /// Sigmoid activation with adjustable steepness.
 ///
@@ -141,7 +141,7 @@ impl NeuralNetwork {
             // Initialize the NN to be fully connected, every input neuron is connected with each output neuron, no hidden neurons yet
             for row in nn.input_matrix.iter_mut() {
                 for val in row.iter_mut() {
-                    let mut w = rng.gen_range(-0.2..0.2);
+                    let mut w = rng.gen_range(-WEIGHT..WEIGHT);
                     if w == 0.0 {
                         w = 0.01;
                     }
@@ -151,7 +151,7 @@ impl NeuralNetwork {
 
             for row in nn.hidden_matrix.iter_mut() {
                 for val in row.iter_mut() {
-                    let mut w = rng.gen_range(-0.2..0.2);
+                    let mut w = rng.gen_range(-WEIGHT..WEIGHT);
                     if w == 0.0 {
                         w = 0.01;
                     }
@@ -301,7 +301,7 @@ impl NeuralNetwork {
         rng: &mut R,
     ) {
         // Use provided weight or generate small random weight
-        let mut w = weight.unwrap_or_else(|| rng.gen_range(-0.2..0.2));
+        let mut w = weight.unwrap_or_else(|| rng.gen_range(-WEIGHT..WEIGHT));
 
         if w == 0.0 {
             w = 0.01;
