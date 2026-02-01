@@ -286,7 +286,8 @@ fn move_with_speed_factor(
     assert!(core.pos.x >= 0.0 && core.pos.x <= SCREEN_WIDTH as f32);
     assert!(core.pos.y >= 0.0 && core.pos.y <= SCREEN_HEIGHT as f32);
     // Deduct energy cost (quadratic in speed for realism)
-    core.energy -= (speed_factor * speed_factor) * moving_decay;
+    let v = speed_factor;
+    core.energy -= PRED_MOVING_DECAY * v.sqrt();
     //TODO: Is negative energy allowed here?
     //assert!(core.energy >= 0.0);
 }
@@ -458,7 +459,6 @@ impl Predator {
     /// Attempts to reproduce, creating an offspring if conditions are met.
     pub fn reproduce<R: Rng>(&mut self, rng: &mut R) -> Option<Predator> {
         // Cooldown timer preventing immediate re-reproduction (applies per frame)
-        const REPRO_COOLDOWN_FRAMES: i32 = 60;
 
         assert!(REPRO_COOLDOWN_FRAMES > 0);
 
