@@ -46,18 +46,16 @@ fn main() {
         parse_arg_str(&args, "--output").unwrap_or_else(|| "benchmark_results".to_string());
     let iterations: usize = parse_arg(&args, "--iterations").unwrap_or(50);
     let warmup: usize = parse_arg(&args, "--warmup").unwrap_or(5);
-    let frames_per_iter: usize = parse_arg(&args, "--frames").unwrap_or(100);
+    let frames_per_iter: usize = parse_arg(&args, "--frames").unwrap_or(2000);
 
-    // Population configurations to test (predators, prey)
+    // Population configurations to test (predators, prey = 5x predators)
     let configs: Vec<(usize, usize)> = vec![
-        (10, 100),
-        (20, 200),
-        (30, 300),
-        (50, 500),
-        (75, 750),
-        (100, 1000),
-        (150, 1500),
-        (200, 2000),
+        (10, 50),
+        (30, 150),
+        (50, 250),
+        (100, 500),
+        (200, 1000),
+        (400, 2000),
     ];
 
     println!("╔══════════════════════════════════════════════════════════════════╗");

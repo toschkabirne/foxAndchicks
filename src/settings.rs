@@ -21,23 +21,23 @@ use std::sync::RwLock;
 // ----------------------------------------
 
 // Mutation / Bias params, only change the numbers, not the variables
-static ADD_NEURON: RwLock<f32> = RwLock::new(0.21);
-static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.71);
-static CHANGE_WEIGHT: RwLock<f32> = RwLock::new(0.31);
+static ADD_NEURON: RwLock<f32> = RwLock::new(0.15);
+static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.70);
+static CHANGE_WEIGHT: RwLock<f32> = RwLock::new(0.50);
 static BIAS: RwLock<f32> = RwLock::new(0.5);
 
 // This is the step size applied when an weight is changed
 pub const MUT_CHANGE_STEP: f32 = 0.05;
-static PREY_INIT_MUT: RwLock<usize> = RwLock::new(10);
-static PRED_INIT_MUT: RwLock<usize> = RwLock::new(10);
+static PREY_INIT_MUT: RwLock<usize> = RwLock::new(20);
+static PRED_INIT_MUT: RwLock<usize> = RwLock::new(20);
 
 pub const SEED: u64 = 42;
 
-pub const PRED_INIT_NUMB: usize = 20;
-pub const PREY_INIT_NUMB: usize = 220;
+pub const PRED_INIT_NUMB: usize = 100;
+pub const PREY_INIT_NUMB: usize = 400;
 
-pub const MAX_PRED_COUNT: usize = 125;
-pub const MAX_PREY_COUNT: usize = 650;
+pub const MAX_PRED_COUNT: usize = 200;
+pub const MAX_PREY_COUNT: usize = 800;
 
 pub const PRED_SIGHT_RANGE: f32 = 150.0;
 pub const PREY_SIGHT_RANGE: f32 = 100.0;

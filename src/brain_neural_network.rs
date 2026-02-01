@@ -24,7 +24,7 @@ const FULLY_CONNECTED: bool = false;
 /// Design rationale: Sigmoid squashes values to (0, 1) range. The parameters
 /// (a = 1.5, b = 0.0) control steepness and offset.
 pub fn sigmoid(x: f32) -> f32 {
-    let a = 4.0; // steepness of curve
+    let a = 6.0; // steepness of curve
     let b = 3.0; // offset of curve
     1.0 / (1.0 + (-x * a + b).exp())
 }
@@ -47,7 +47,7 @@ pub fn act_func(x: f32) -> f32 {
 /// - Input 0 produces sigmoid(-1.5) ≈ 0.18 (slow movement)
 /// - Input needs to be > 1.5 to get significant speed
 pub fn act_speed(x: f32) -> f32 {
-    sigmoid(x - 1.5)
+    sigmoid(x)
 }
 
 /// Specialized activation for angle/turning output.
@@ -224,6 +224,47 @@ impl NeuralNetwork {
         let out1 = act_angle(activations[1] + out1_dot);
 
         [out0, out1]
+    }
+
+    /// Debug version of forward pass that returns (outputs, pre_activations)
+    /// pre_activations are the raw values before the final activation function.
+    pub fn forward_debug(&mut self, inputs: &[f32], energy_factor: f32) -> ([f32; 2], [f32; 2]) {
+        // 1. Prepare input activations
+        let mut in_act = Vec::with_capacity(self.num_inputs + 1);
+        in_act.extend_from_slice(inputs);
+        in_act.push(self.bias * energy_factor);
+
+        // 2. Initial activations for (outputs + hidden) from input_matrix
+        let total_neurons_idx = self.neuron_number - (self.num_inputs + 1);
+        let mut activations = vec![0.0; total_neurons_idx];
+
+        for (i, row) in self.input_matrix.iter().enumerate() {
+            activations[i] = Self::row_dot(row, &in_act);
+        }
+
+        // 3. Hidden evaluation in topological order
+        let hidden_act_start = self.num_outputs;
+        for &order in &self.eval_order {
+            let dot = Self::row_dot(&self.hidden_matrix[order], &activations[hidden_act_start..]);
+            activations[order] = act_func(activations[order] + dot);
+        }
+
+        // 4. Store for debug
+        self.last_inputs = in_act;
+        self.last_activations = activations.clone();
+
+        // 5. Compute final outputs (indices 0 and 1)
+        // output 0 - speed delta
+        let out0_dot = Self::row_dot(&self.hidden_matrix[0], &activations[self.num_outputs..]);
+        let pre_speed = activations[0] + out0_dot;
+        let out0 = act_speed(pre_speed);
+
+        // output 1 - turn delta
+        let out1_dot = Self::row_dot(&self.hidden_matrix[1], &activations[self.num_outputs..]);
+        let pre_angle = activations[1] + out1_dot;
+        let out1 = act_angle(pre_angle);
+
+        ([out0, out1], [pre_speed, pre_angle])
     }
 
     /// Helper function: computes dot product of a weight row with an activation vector.

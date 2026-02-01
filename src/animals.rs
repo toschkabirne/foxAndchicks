@@ -623,7 +623,7 @@ impl Prey {
         let speed_factor = outputs[0].clamp(0.0, 1.0);
 
         // *THIS CAN BE ADAPTED*
-        let threshold = 0.1;
+        let threshold = 0.6;
         // threshold for moving, and if low on energy, stop moving, gain energy
         if speed_factor < threshold || self.core.energy < 0.02 * PREY_ENERGY {
             // moving threshold, rests and gains energy
