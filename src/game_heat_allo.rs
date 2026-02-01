@@ -47,12 +47,12 @@ impl Game {
     ) -> Self {
         let mut rng = StdRng::seed_from_u64(settings::SEED);
 
-        // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
+        // Spawn initial predators and preys
         let predators: Vec<Predator> = (0..num_preds)
             .map(|_| {
                 Predator::new(
-                    rng.gen_range(0.0..settings::SCREEN_WIDTH as f32),
-                    rng.gen_range(0.0..settings::SCREEN_HEIGHT as f32),
+                    rng.gen_range(0.0..settings::screen_width() as f32),
+                    rng.gen_range(0.0..settings::screen_height() as f32),
                     &mut rng,
                 )
             })
@@ -61,8 +61,8 @@ impl Game {
         let preys: Vec<Prey> = (0..num_preys)
             .map(|_| {
                 Prey::new(
-                    rng.gen_range(0.0..settings::SCREEN_WIDTH as f32),
-                    rng.gen_range(0.0..settings::SCREEN_HEIGHT as f32),
+                    rng.gen_range(0.0..settings::screen_width() as f32),
+                    rng.gen_range(0.0..settings::screen_height() as f32),
                     &mut rng,
                 )
             })
@@ -70,12 +70,12 @@ impl Game {
 
         // Set up spatial hash
         let cell_pred =
-            ((settings::SCREEN_WIDTH as f32) / settings::PRED_SIGHT_RANGE).floor() as i32;
+            ((settings::screen_width() as f32) / settings::pred_sight_range()).floor() as usize;
         let cell_prey =
-            ((settings::SCREEN_WIDTH as f32) / settings::PREY_SIGHT_RANGE).floor() as i32;
+            ((settings::screen_width() as f32) / settings::prey_sight_range()).floor() as usize;
 
-        let world_w = settings::SCREEN_WIDTH as f32;
-        let world_h = settings::SCREEN_HEIGHT as f32;
+        let world_w = settings::screen_width() as f32;
+        let world_h = settings::screen_height() as f32;
 
         let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_pred, world_w, world_h);
         let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_prey, world_w, world_h);

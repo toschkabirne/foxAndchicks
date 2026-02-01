@@ -43,8 +43,8 @@ impl Game {
     pub fn get_closest_animal_at(&self, x: f32, y: f32) -> Option<(AnimalType, usize)> {
         let click_pos = Vec2::new(x, y);
         let selection_radius = 40.0; // Reasonable click radius
-        let world_w = settings::SCREEN_WIDTH as f32;
-        let world_h = settings::SCREEN_HEIGHT as f32;
+        let world_w = settings::screen_width() as f32;
+        let world_h = settings::screen_height() as f32;
 
         let mut closest_d = selection_radius;
         let mut found = None;
@@ -104,8 +104,8 @@ impl Game {
         let predators: Vec<Predator> = (0..num_preds)
             .map(|_| {
                 Predator::new(
-                    rng.gen_range(0.0..settings::SCREEN_WIDTH as f32),
-                    rng.gen_range(0.0..settings::SCREEN_HEIGHT as f32),
+                    rng.gen_range(0.0..settings::screen_width() as f32),
+                    rng.gen_range(0.0..settings::screen_height() as f32),
                     &mut rng,
                 )
             })
@@ -114,8 +114,8 @@ impl Game {
         let preys: Vec<Prey> = (0..num_preys)
             .map(|_| {
                 Prey::new(
-                    rng.gen_range(0.0..settings::SCREEN_WIDTH as f32),
-                    rng.gen_range(0.0..settings::SCREEN_HEIGHT as f32),
+                    rng.gen_range(0.0..settings::screen_width() as f32),
+                    rng.gen_range(0.0..settings::screen_height() as f32),
                     &mut rng,
                 )
             })
@@ -123,12 +123,12 @@ impl Game {
 
         // Set up spatial hash
         // Predators query prey_hash, so prey_hash cell size should be PRED_SIGHT_RANGE
-        let cell_size_prey = settings::PRED_SIGHT_RANGE as usize;
+        let cell_size_prey = settings::pred_sight_range() as usize;
         // Preys query pred_hash, so pred_hash cell size should be PREY_SIGHT_RANGE
-        let cell_size_pred = settings::PREY_SIGHT_RANGE as usize;
+        let cell_size_pred = settings::prey_sight_range() as usize;
 
-        let world_w = settings::SCREEN_WIDTH as f32;
-        let world_h = settings::SCREEN_HEIGHT as f32;
+        let world_w = settings::screen_width() as f32;
+        let world_h = settings::screen_height() as f32;
 
         let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_size_pred, world_w, world_h);
         let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_size_prey, world_w, world_h);
@@ -427,7 +427,7 @@ mod tests {
         game.predators[0].core.set_xy(500.0, 500.0);
 
         // Move prey to 1 pixel within sight range
-        let sight_range = settings::PRED_SIGHT_RANGE;
+        let sight_range = settings::pred_sight_range();
         game.preys[0].core.set_xy(500.0 + sight_range - 1.0, 500.0);
 
         // Rebuild hash
@@ -458,7 +458,7 @@ mod tests {
         game.predators[0].core.set_xy(500.0, 500.0);
 
         // Move prey to well outside sight range
-        let sight_range = settings::PRED_SIGHT_RANGE;
+        let sight_range = settings::pred_sight_range();
         game.preys[0]
             .core
             .set_xy(500.0 + 2.0 * sight_range + 10.0, 500.0);
@@ -500,10 +500,10 @@ mod tests {
 
         // Position where it's within spatial hash but outside FOV.
         // We place it at an angle slightly larger than half-FOV.
-        let half_fov_rad = (settings::PRED_SIGHT_ANGLE / 2.0).to_radians();
+        let half_fov_rad = (settings::pred_sight_angle() / 2.0).to_radians();
         let exclusion_angle = half_fov_rad + 0.1;
 
-        let dist = settings::PRED_SIGHT_RANGE * 0.5; // Well within range
+        let dist = settings::pred_sight_range() * 0.5; // Well within range
         let prey_x = 500.0 + dist * exclusion_angle.cos();
         let prey_y = 500.0 + dist * exclusion_angle.sin();
 

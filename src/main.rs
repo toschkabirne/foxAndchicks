@@ -6,7 +6,8 @@ use predator_vs_prey::data_manager::AnimalType;
 use predator_vs_prey::game::Game;
 use predator_vs_prey::settings::{self, DEFAULT_DATA_FILE};
 use predator_vs_prey::visualization::{
-    draw_frame, draw_game_stats, draw_neural_network, draw_population_graph_fullscreen_live, graph_enabled, window_conf,
+    draw_frame, draw_game_stats, draw_neural_network, draw_population_graph_fullscreen_live,
+    graph_enabled, window_conf,
 };
 
 use macroquad::prelude::*;
@@ -129,7 +130,7 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
             }
         }
 
-      let (pred_count, prey_count) = frame.counts();
+        let (pred_count, prey_count) = frame.counts();
 
         // Collect data ONLY if graph is enabled
         if graph_on {
@@ -177,9 +178,8 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
             }
         }
 
-
         // Draw speed/status
-        let status_x = settings::SCREEN_WIDTH as f32 + 15.0;
+        let status_x = settings::screen_width() as f32 + 15.0;
         let status_y = 180.0;
         if paused {
             draw_text("PAUSED", status_x, status_y, 30.0, RED);

@@ -4,7 +4,7 @@
 
 use crate::brain_neural_network::NeuralNetwork;
 use crate::data_manager::{AnimalType, Frame};
-use crate::settings::{self, SCREEN_HEIGHT};
+use crate::settings;
 use macroquad::prelude::*;
 pub const STATS_PANEL_WIDTH: i32 = 200;
 pub const PLAYBACK_CONTROLS_HEIGHT: f32 = 60.0;
@@ -22,8 +22,8 @@ pub fn graph_enabled() -> bool {
 pub fn window_conf() -> Conf {
     Conf {
         window_title: "Predator and Prey Simulation".to_string(),
-        window_width: settings::SCREEN_WIDTH + STATS_PANEL_WIDTH,
-        window_height: settings::SCREEN_HEIGHT,
+        window_width: settings::screen_width() + STATS_PANEL_WIDTH,
+        window_height: settings::screen_height(),
         ..Default::default()
     }
 }
@@ -84,19 +84,19 @@ pub fn draw_wrapped_line(
 
 /// Draws the statistics panel on the right side of the game field
 pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize) {
-    let panel_x = settings::SCREEN_WIDTH as f32;
+    let panel_x = settings::screen_width() as f32;
     draw_rectangle(
         panel_x,
         0.0,
         STATS_PANEL_WIDTH as f32,
-        SCREEN_HEIGHT as f32,
+        settings::screen_height() as f32,
         Color::from_rgba(30, 30, 30, 255),
     );
     draw_line(
         panel_x,
         0.0,
         panel_x,
-        SCREEN_HEIGHT as f32,
+        settings::screen_height() as f32,
         2.0,
         WHITE,
     );
@@ -125,10 +125,16 @@ pub fn draw_population_graph_fullscreen(
     // Leave room for playback controls at the bottom
     let area_x = 0.0;
     let area_y = 0.0;
-    let area_w = (settings::SCREEN_WIDTH) as f32;
-    let area_h = (settings::SCREEN_HEIGHT as f32 - PLAYBACK_CONTROLS_HEIGHT).max(1.0);
+    let area_w = (settings::screen_width()) as f32;
+    let area_h = (settings::screen_height() as f32 - PLAYBACK_CONTROLS_HEIGHT).max(1.0);
 
-    draw_rectangle(area_x, area_y, area_w, area_h, Color::from_rgba(22, 22, 22, 255));
+    draw_rectangle(
+        area_x,
+        area_y,
+        area_w,
+        area_h,
+        Color::from_rgba(22, 22, 22, 255),
+    );
     draw_text(
         "Population over time (press G to return)",
         area_x + 20.0,
@@ -154,8 +160,22 @@ pub fn draw_population_graph_fullscreen(
     let plot_h = (area_h - pad_t - pad_b).max(1.0);
 
     // Axes
-    draw_line(plot_x0, plot_y0, plot_x0, plot_y0 + plot_h, 2.0, Color::from_rgba(90, 90, 90, 255));
-    draw_line(plot_x0, plot_y0 + plot_h, plot_x0 + plot_w, plot_y0 + plot_h, 2.0, Color::from_rgba(90, 90, 90, 255));
+    draw_line(
+        plot_x0,
+        plot_y0,
+        plot_x0,
+        plot_y0 + plot_h,
+        2.0,
+        Color::from_rgba(90, 90, 90, 255),
+    );
+    draw_line(
+        plot_x0,
+        plot_y0 + plot_h,
+        plot_x0 + plot_w,
+        plot_y0 + plot_h,
+        2.0,
+        Color::from_rgba(90, 90, 90, 255),
+    );
 
     // Precompute max + means over the whole recording (stable scaling like your picture)
     let mut max_y: usize = 1;
@@ -173,24 +193,62 @@ pub fn draw_population_graph_fullscreen(
     // Grid + labels (0, 50%, 100%)
     for frac in [0.0_f32, 0.5, 1.0] {
         let y = plot_y0 + plot_h * (1.0 - frac);
-        draw_line(plot_x0, y, plot_x0 + plot_w, y, 1.0, Color::from_rgba(45, 45, 45, 255));
+        draw_line(
+            plot_x0,
+            y,
+            plot_x0 + plot_w,
+            y,
+            1.0,
+            Color::from_rgba(45, 45, 45, 255),
+        );
         let label_val = (max_y_f * frac).round() as usize;
-        draw_text(&format!("{}", label_val), area_x + 18.0, y + 6.0, 18.0, Color::from_rgba(200, 200, 200, 255));
+        draw_text(
+            &format!("{}", label_val),
+            area_x + 18.0,
+            y + 6.0,
+            18.0,
+            Color::from_rgba(200, 200, 200, 255),
+        );
     }
 
     // Mean lines (like your attachment)
     let mean_pred_y = plot_y0 + plot_h * (1.0 - (mean_pred / max_y_f));
     let mean_prey_y = plot_y0 + plot_h * (1.0 - (mean_prey / max_y_f));
-    draw_line(plot_x0, mean_pred_y, plot_x0 + plot_w, mean_pred_y, 2.0, Color::from_rgba(180, 180, 180, 180));
-    draw_line(plot_x0, mean_prey_y, plot_x0 + plot_w, mean_prey_y, 2.0, Color::from_rgba(180, 180, 180, 180));
+    draw_line(
+        plot_x0,
+        mean_pred_y,
+        plot_x0 + plot_w,
+        mean_pred_y,
+        2.0,
+        Color::from_rgba(180, 180, 180, 180),
+    );
+    draw_line(
+        plot_x0,
+        mean_prey_y,
+        plot_x0 + plot_w,
+        mean_prey_y,
+        2.0,
+        Color::from_rgba(180, 180, 180, 180),
+    );
 
-    draw_text("Mean predators", plot_x0 + 10.0, mean_pred_y - 8.0, 18.0, settings::PRED_COLOR);
-    draw_text("Mean preys",     plot_x0 + 10.0, mean_prey_y - 8.0, 18.0, settings::PREY_COLOR);
+    draw_text(
+        "Mean predators",
+        plot_x0 + 10.0,
+        mean_pred_y - 8.0,
+        18.0,
+        settings::PRED_COLOR,
+    );
+    draw_text(
+        "Mean preys",
+        plot_x0 + 10.0,
+        mean_prey_y - 8.0,
+        18.0,
+        settings::PREY_COLOR,
+    );
 
     // X mapping across the full timeline
-    let x_for_frame = |fi: usize| -> f32 {
-        plot_x0 + (fi as f32 / (total_frames as f32 - 1.0)) * plot_w
-    };
+    let x_for_frame =
+        |fi: usize| -> f32 { plot_x0 + (fi as f32 / (total_frames as f32 - 1.0)) * plot_w };
 
     // Downsample to ~one point per pixel
     let step = ((total_frames as f32 / plot_w).ceil() as usize).max(1);
@@ -222,13 +280,26 @@ pub fn draw_population_graph_fullscreen(
     // Current frame marker
     if current_frame < total_frames {
         let x = x_for_frame(current_frame);
-        draw_line(x, plot_y0, x, plot_y0 + plot_h, 2.0, Color::from_rgba(220, 220, 220, 120));
+        draw_line(
+            x,
+            plot_y0,
+            x,
+            plot_y0 + plot_h,
+            2.0,
+            Color::from_rgba(220, 220, 220, 120),
+        );
     }
 
     // Legend
     let legend_y = area_y + area_h - 10.0;
     draw_text("Predators", plot_x0, legend_y, 20.0, settings::PRED_COLOR);
-    draw_text("Preys", plot_x0 + 150.0, legend_y, 20.0, settings::PREY_COLOR);
+    draw_text(
+        "Preys",
+        plot_x0 + 150.0,
+        legend_y,
+        20.0,
+        settings::PREY_COLOR,
+    );
 }
 
 pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
@@ -238,10 +309,16 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
 
     let area_x = 0.0;
     let area_y = 0.0;
-    let area_w = settings::SCREEN_WIDTH as f32;
-    let area_h = settings::SCREEN_HEIGHT as f32;
+    let area_w = settings::screen_width() as f32;
+    let area_h = settings::screen_height() as f32;
 
-    draw_rectangle(area_x, area_y, area_w, area_h, Color::from_rgba(22, 22, 22, 255));
+    draw_rectangle(
+        area_x,
+        area_y,
+        area_w,
+        area_h,
+        Color::from_rgba(22, 22, 22, 255),
+    );
     draw_text(
         "Population over time (press G to return)",
         area_x + 20.0,
@@ -252,7 +329,13 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
 
     let total_frames = history.len();
     if total_frames < 2 {
-        draw_text("Collecting data...", area_x + 20.0, area_y + 60.0, 20.0, WHITE);
+        draw_text(
+            "Collecting data...",
+            area_x + 20.0,
+            area_y + 60.0,
+            20.0,
+            WHITE,
+        );
         return;
     }
 
@@ -343,8 +426,8 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
     );
 
     // Mean labels WITH live values
-    let base_offset = 8.0;     // label sits above its mean line
-    let min_sep = 20.0;        // keep labels from overlapping
+    let base_offset = 8.0; // label sits above its mean line
+    let min_sep = 20.0; // keep labels from overlapping
     let top_limit = plot_y0 + 14.0;
 
     let mut pred_label_y = (mean_pred_y - base_offset).max(top_limit);
@@ -376,9 +459,8 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
     );
 
     // X mapping across history so far
-    let x_for_frame = |fi: usize| -> f32 {
-        plot_x0 + (fi as f32 / (total_frames as f32 - 1.0)) * plot_w
-    };
+    let x_for_frame =
+        |fi: usize| -> f32 { plot_x0 + (fi as f32 / (total_frames as f32 - 1.0)) * plot_w };
 
     // Downsample to ~one point per pixel
     let step = ((total_frames as f32 / plot_w).ceil() as usize).max(1);
@@ -422,10 +504,14 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
     // Legend
     let legend_y = area_y + area_h - 10.0;
     draw_text("Predators", plot_x0, legend_y, 20.0, settings::PRED_COLOR);
-    draw_text("Preys", plot_x0 + 150.0, legend_y, 20.0, settings::PREY_COLOR);
+    draw_text(
+        "Preys",
+        plot_x0 + 150.0,
+        legend_y,
+        20.0,
+        settings::PREY_COLOR,
+    );
 }
-
-
 
 /// Draws all animals in the given frame.
 /// If `selected_animal` is specified, its sightlines are drawn even if `draw_all_sight_lines` is false.
@@ -476,8 +562,8 @@ pub fn draw_playback_controls(state: &mut PlaybackState, total_frames: usize) {
         return;
     }
 
-    let panel_y = settings::SCREEN_HEIGHT as f32 - PLAYBACK_CONTROLS_HEIGHT;
-    let panel_width = settings::SCREEN_WIDTH as f32;
+    let panel_y = settings::screen_height() as f32 - PLAYBACK_CONTROLS_HEIGHT;
+    let panel_width = settings::screen_width() as f32;
 
     // Draw background panel
     draw_rectangle(
@@ -609,7 +695,7 @@ pub fn draw_playback_controls(state: &mut PlaybackState, total_frames: usize) {
     let speed_text = format!("Speed: {:.1}x", state.playback_speed);
     draw_text(
         &speed_text,
-        settings::SCREEN_WIDTH as f32 + 15.0,
+        settings::screen_width() as f32 + 15.0,
         170.0,
         18.0,
         WHITE,
@@ -660,10 +746,10 @@ pub fn draw_predator_sight(pos: Vec2, angle: f32) {
         pos,
         angle,
         settings::PRED_SIGHT_COUNT,
-        settings::PRED_SIGHT_RANGE,
-        settings::PRED_SIGHT_ANGLE,
-        settings::SCREEN_WIDTH as f32,
-        settings::SCREEN_HEIGHT as f32,
+        settings::pred_sight_range(),
+        settings::pred_sight_angle(),
+        settings::screen_width() as f32,
+        settings::screen_height() as f32,
     );
 }
 
@@ -672,10 +758,10 @@ pub fn draw_prey_sight(pos: Vec2, angle: f32) {
         pos,
         angle,
         settings::PREY_SIGHT_COUNT,
-        settings::PREY_SIGHT_RANGE,
-        settings::PREY_SIGHT_ANGLE,
-        settings::SCREEN_WIDTH as f32,
-        settings::SCREEN_HEIGHT as f32,
+        settings::prey_sight_range(),
+        settings::prey_sight_angle(),
+        settings::screen_width() as f32,
+        settings::screen_height() as f32,
     );
 }
 

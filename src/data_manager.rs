@@ -60,34 +60,34 @@ impl SimulationSettings {
     /// Captures current settings from the settings module
     pub fn capture() -> Self {
         SimulationSettings {
-            screen_width: Some(settings::SCREEN_WIDTH),
-            screen_height: Some(settings::SCREEN_HEIGHT),
+            screen_width: Some(settings::screen_width()),
+            screen_height: Some(settings::screen_height()),
             frames_per_second: Some(settings::FRAMES_PER_SECOND),
             pred_init_numb: Some(settings::PRED_INIT_NUMB),
             prey_init_numb: Some(settings::PREY_INIT_NUMB),
             max_pred_count: Some(settings::MAX_PRED_COUNT),
             max_prey_count: Some(settings::MAX_PREY_COUNT),
 
-            predator_sight_range: Some(settings::PRED_SIGHT_RANGE),
-            prey_sight_range: Some(settings::PREY_SIGHT_RANGE),
-            predator_sight_angle: Some(settings::PRED_SIGHT_ANGLE),
-            prey_sight_angle: Some(settings::PREY_SIGHT_ANGLE),
+            predator_sight_range: Some(settings::pred_sight_range()),
+            prey_sight_range: Some(settings::prey_sight_range()),
+            predator_sight_angle: Some(settings::pred_sight_angle()),
+            prey_sight_angle: Some(settings::prey_sight_angle()),
             prey_sight_count: Some(settings::PREY_SIGHT_COUNT),
             predator_sight_count: Some(settings::PRED_SIGHT_COUNT),
 
             predator_radius: Some(settings::PRED_RADIUS),
-            predator_speed: Some(settings::PRED_SPEED),
+            predator_speed: Some(settings::pred_speed()),
             pred_energy: Some(settings::PRED_ENERGY),
             predator_energy_gain: Some(settings::PRED_ENERGY_GAIN),
-            pred_default_decay: Some(settings::PRED_DEFAULT_DECAY),
-            pred_moving_decay: Some(settings::PRED_MOVING_DECAY),
+            pred_default_decay: Some(settings::pred_default_decay()),
+            pred_moving_decay: Some(settings::pred_moving_decay()),
 
             prey_radius: Some(settings::PREY_RADIUS),
-            prey_speed: Some(settings::PREY_SPEED),
+            prey_speed: Some(settings::prey_speed()),
             prey_energy: Some(settings::PREY_ENERGY),
             prey_reproducation_rate: Some(settings::PREY_REPRODUCATION_RATE),
-            prey_moving_decay: Some(settings::PREY_MOVING_DECAY),
-            prey_rest_energy_gain: Some(settings::PREY_REST_ENERGY_GAIN),
+            prey_moving_decay: Some(settings::prey_moving_decay()),
+            prey_rest_energy_gain: Some(settings::prey_rest_energy_gain()),
 
             // Runtime-mutable settings
             prey_init_mut: Some(settings::prey_init_mut()),
@@ -415,11 +415,14 @@ mod tests {
 
         // Verify we can read the settings and frames back
         let (settings, mut frame_reader) = DataManager::read_file(&actual_filename);
-        assert_eq!(settings.screen_width, Some(crate::settings::SCREEN_WIDTH));
-        assert_eq!(settings.screen_height, Some(crate::settings::SCREEN_HEIGHT));
+        assert_eq!(settings.screen_width, Some(crate::settings::screen_width()));
+        assert_eq!(
+            settings.screen_height,
+            Some(crate::settings::screen_height())
+        );
         assert_eq!(
             settings.predator_sight_range,
-            Some(crate::settings::PRED_SIGHT_RANGE)
+            Some(crate::settings::pred_sight_range())
         );
 
         let read_frame = frame_reader.next().expect("Should have one frame");
@@ -446,7 +449,7 @@ mod tests {
         assert!(std::path::Path::new(&settings_path).exists());
 
         let settings = DataManager::read_settings(&actual_filename);
-        assert_eq!(settings.screen_width, Some(crate::settings::SCREEN_WIDTH));
+        assert_eq!(settings.screen_width, Some(crate::settings::screen_width()));
         assert_eq!(
             settings.frames_per_second,
             Some(crate::settings::FRAMES_PER_SECOND)

@@ -1,5 +1,5 @@
-use crate::settings::*;
 use macroquad::prelude::*;
+use predator_vs_prey::settings;
 use std::env;
 use std::io::{self, Write};
 
@@ -14,8 +14,8 @@ use ::rand::{Rng, SeedableRng};
 fn window_conf() -> Conf {
     Conf {
         window_title: "Interactive Predator-Prey".to_string(),
-        window_width: SCREEN_WIDTH,
-        window_height: SCREEN_HEIGHT,
+        window_width: settings::screen_width(),
+        window_height: settings::screen_height(),
         ..Default::default()
     }
 }
@@ -104,16 +104,16 @@ fn move_with_keyboard(core: &mut AnimalCore, speed: f32) {
         core.pos.x += speed_factor * current_speed * core.angle.cos();
         core.pos.y += speed_factor * current_speed * core.angle.sin();
 
-        core.pos.x = core.pos.x.rem_euclid(SCREEN_WIDTH as f32);
-        core.pos.y = core.pos.y.rem_euclid(SCREEN_HEIGHT as f32);
+        core.pos.x = core.pos.x.rem_euclid(settings::screen_width() as f32);
+        core.pos.y = core.pos.y.rem_euclid(settings::screen_height() as f32);
     }
 }
 
 /// Helper to find a respawn position near the center but away from a threat.
 fn get_respawn_pos<R: Rng>(avoid_pos: Vec2, rng: &mut R) -> (f32, f32) {
-    let min_dist = PRED_RADIUS + PREY_RADIUS + 30.0;
-    let world_w = SCREEN_WIDTH as f32;
-    let world_h = SCREEN_HEIGHT as f32;
+    let min_dist = settings::PRED_RADIUS + settings::PREY_RADIUS + 30.0;
+    let world_w = settings::screen_width() as f32;
+    let world_h = settings::screen_height() as f32;
     let center_x = world_w * 0.5;
     let center_y = world_h * 0.5;
     let offset = 100.0; // Small random offset
@@ -141,8 +141,8 @@ async fn main() {
     let mutations = read_mutations_from_stdin(mode);
     let mut rng = StdRng::seed_from_u64(settings::SEED);
 
-    let center_x = (SCREEN_WIDTH / 2) as f32;
-    let center_y = (SCREEN_HEIGHT / 2) as f32;
+    let center_x = (settings::screen_width() / 2) as f32;
+    let center_y = (settings::screen_height() / 2) as f32;
 
     // Spawn entities depending on mode:
     // - NN agent goes to center
@@ -168,11 +168,13 @@ async fn main() {
     match mode {
         TestMode::TestPrey => {
             let input_len = prey.get_inputs(std::iter::once(&predator)).len();
-            prey.core.brain = NeuralNetwork::new(input_len, 2, mutations, bias(), &mut rng);
+            prey.core.brain =
+                NeuralNetwork::new(input_len, 2, mutations, settings::bias(), &mut rng);
         }
         TestMode::TestPredator => {
             let input_len = predator.get_inputs(std::iter::once(&prey)).len();
-            predator.core.brain = NeuralNetwork::new(input_len, 2, mutations, bias(), &mut rng);
+            predator.core.brain =
+                NeuralNetwork::new(input_len, 2, mutations, settings::bias(), &mut rng);
         }
     }
 
@@ -185,19 +187,19 @@ async fn main() {
         match mode {
             TestMode::TestPrey => {
                 // Predator is keyboard dummy
-                move_with_keyboard(&mut predator.core, PRED_SPEED);
+                move_with_keyboard(&mut predator.core, settings::pred_speed());
 
                 // Prey is NN agent
                 let inputs = prey.get_inputs(std::iter::once(&predator));
                 prey.move_step(&inputs);
 
                 // If predator catches prey -> respawn prey + rebuild prey brain
-                let eat_r = PRED_RADIUS + PREY_RADIUS;
+                let eat_r = settings::PRED_RADIUS + settings::PREY_RADIUS;
                 let d = wrapped_distance_abs(
                     predator.core.pos,
                     prey.core.pos,
-                    SCREEN_WIDTH as f32,
-                    SCREEN_HEIGHT as f32,
+                    settings::screen_width() as f32,
+                    settings::screen_height() as f32,
                 );
 
                 if d < eat_r {
@@ -206,25 +208,26 @@ async fn main() {
                     prey = Prey::new(x, y, &mut rng);
 
                     let input_len = prey.get_inputs(std::iter::once(&predator)).len();
-                    prey.core.brain = NeuralNetwork::new(input_len, 2, mutations, bias(), &mut rng);
+                    prey.core.brain =
+                        NeuralNetwork::new(input_len, 2, mutations, settings::bias(), &mut rng);
                 }
             }
 
             TestMode::TestPredator => {
                 // Prey is keyboard dummy
-                move_with_keyboard(&mut prey.core, PREY_SPEED);
+                move_with_keyboard(&mut prey.core, settings::prey_speed());
 
                 // Predator is NN agent
                 let inputs = predator.get_inputs(std::iter::once(&prey));
                 predator.move_step(&inputs);
 
                 // If predator catches prey -> respawn dummy prey (no new brain)
-                let eat_r = PRED_RADIUS + PREY_RADIUS;
+                let eat_r = settings::PRED_RADIUS + settings::PREY_RADIUS;
                 let d = wrapped_distance_abs(
                     predator.core.pos,
                     prey.core.pos,
-                    SCREEN_WIDTH as f32,
-                    SCREEN_HEIGHT as f32,
+                    settings::screen_width() as f32,
+                    settings::screen_height() as f32,
                 );
 
                 if d < eat_r {
@@ -234,7 +237,7 @@ async fn main() {
 
                     let input_len = predator.get_inputs(std::iter::once(&prey)).len();
                     predator.core.brain =
-                        NeuralNetwork::new(input_len, 2, mutations, bias(), &mut rng);
+                        NeuralNetwork::new(input_len, 2, mutations, settings::bias(), &mut rng);
                 }
             }
         }
