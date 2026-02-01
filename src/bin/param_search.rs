@@ -140,10 +140,24 @@ fn main() {
         .par_iter()
         .map(|params| {
             if let Some(res) = run_trial(params) {
-                print!(".");
+                let status = if res.survived {
+                    "SURVIVED".green()
+                } else {
+                    "DIED    ".red()
+                };
+
+                println!(
+                    "[{}] Steps: {:<5} | AddN:{:.2} AddW:{:.1} ChngW:{:.1} Mut:{}",
+                    status,
+                    res.steps,
+                    params.add_neuron.unwrap_or(0.0),
+                    params.add_weight.unwrap_or(0.0),
+                    params.change_weight.unwrap_or(0.0),
+                    params.pred_init_mut.unwrap_or(0)
+                );
                 res
             } else {
-                print!("x");
+                println!("{}", "ERROR: Run failed".red());
                 SimResult {
                     survived: false,
                     steps: 0,
