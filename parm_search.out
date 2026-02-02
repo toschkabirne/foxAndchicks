@@ -1,19 +1,5 @@
-{
-  "survived": true,
-  "steps": 20000,
-  "avg_step_time": 0.00354080919165,
-  "final_predators": 47,
-  "final_preys": 400,
-  "parameters": {
-    "ADD_NEURON": 0.15,
-    "ADD_WEIGHT": 0.6,
-    "CHANGE_WEIGHT": 0.6,
-    "MAX_PRED_COUNT": 600,
-    "MAX_PREY_COUNT": 2400,
-    "PRED_INIT_MUT": 40,
-    "PRED_INIT_NUMB": 100,
-    "PREY_INIT_MUT": 40,
-    "PREY_INIT_NUMB": 400
-  },
-  "error": null
-}
+Successful Runs (56):
+{"survived":true,"steps":30000,"avg_step_time":0.0027055709111333333,"final_predators":72,"final_preys":97,"parameters":{"ADD_NEURON":0.08,"ADD_WEIGHT":0.5,"CHANGE_WEIGHT":0.8,"MAX_PRED_COUNT":225,"MAX_PREY_COUNT":1050,"PRED_INIT_MUT":20,"PRED_INIT_NUMB":150,"PREY_INIT_MUT":20,"PREY_INIT_NUMB":600},"error":null}
+{"survived":true,"steps":30000,"avg_step_time":0.0023827342208333335,"final_predators":69,"final_preys":94,"parameters":{"ADD_NEURON":0.1,"ADD_WEIGHT":0.6,"CHANGE_WEIGHT":0.6,"MAX_PRED_COUNT":225,"MAX_PREY_COUNT":1050,"PRED_INIT_MUT":20,"PRED_INIT_NUMB":150,"PREY_INIT_MUT":20,"PREY_INIT_NUMB":600},"error":null}
+{"survived":true,"steps":30000,"avg_step_time":0.002344681102766666,"final_predators":17,"final_preys":96,"parameters":{"ADD_NEURON":0.12,"ADD_WEIGHT":0.5,"CHANGE_WEIGHT":0.6,"MAX_PRED_COUNT":225,"MAX_PREY_COUNT":1050,"PRED_INIT_MUT":20,"PRED_INIT_NUMB":150,"PREY_INIT_MUT":20,"PREY_INIT_NUMB":600},"error":null}
+{"survived":true,"steps":30000,"avg_step_time":0.0032135453166666664,"final_predators":150,"final_preys":700,"parameters":{"ADD_NEURON":0.14,"ADD_WEIGHT":0.5,"CHANGE_WEIGHT":0.8,"MAX_PRED_COUNT":150,"MAX_PREY_COUNT":700,"PRED_INIT_MUT":20,"PRED_INIT_NUMB":100,"PREY_INIT_MUT":20,"PREY_INIT_NUMB":400},"error":null}

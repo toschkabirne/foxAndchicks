@@ -2,6 +2,8 @@ use colored::*;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::fs::File;
+use std::io::Write;
 use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,12 +53,16 @@ fn generate_grid_params() -> Vec<Params> {
     let change_weights: Vec<f32> = vec![0.6, 0.7, 0.8, 0.9];
 
     // mutation: 20, 30, 40 (for both pred and prey init mut)
-    let mutations: Vec<usize> = vec![20, 30, 40];
+    let mutations: Vec<usize> = vec![20];
 
     // Population configs: (PredInit, PreyInit, MaxPred, MaxPrey)
     // 1. 40, 160, 125, 500
     // 2. 100, 400, 600, 2400
-    let pop_configs = vec![(40, 160, 125, 500), (100, 400, 600, 2400)];
+    let pop_configs = vec![
+        (40, 160, 125, 500),
+        (100, 400, 150, 700),
+        (150, 600, 225, 1050),
+    ];
 
     for &an in &add_neurons {
         for &aw in &add_weights {
@@ -91,7 +97,7 @@ fn run_trial(params: &Params) -> Option<SimResult> {
         .arg("--params")
         .arg(&params_json)
         .arg("--max_steps")
-        .arg("20000")
+        .arg("30000")
         .output();
 
     // Fallback to cargo run if binary not found
@@ -107,7 +113,7 @@ fn run_trial(params: &Params) -> Option<SimResult> {
             .arg("--params")
             .arg(&params_json)
             .arg("--max_steps")
-            .arg("20000")
+            .arg("30000")
             .output()
             .ok()?,
     };
@@ -147,13 +153,17 @@ fn main() {
                 };
 
                 println!(
-                    "[{}] Steps: {:<5} | AddN:{:.2} AddW:{:.1} ChngW:{:.1} Mut:{}",
+                    "[{}] Steps: {:<5} | AddN:{:.2} AddW:{:.1} ChngW:{:.1} Mut:{} | Pop: {}-{}/{}-{}",
                     status,
                     res.steps,
                     params.add_neuron.unwrap_or(0.0),
                     params.add_weight.unwrap_or(0.0),
                     params.change_weight.unwrap_or(0.0),
-                    params.pred_init_mut.unwrap_or(0)
+                    params.pred_init_mut.unwrap_or(0),
+                    params.pred_init_numb.unwrap_or(0),
+                    params.max_pred_count.unwrap_or(0),
+                    params.prey_init_numb.unwrap_or(0),
+                    params.max_prey_count.unwrap_or(0),
                 );
                 res
             } else {
@@ -176,6 +186,19 @@ fn main() {
     // Filter for survived
     let survived: Vec<&SimResult> = results.iter().filter(|r| r.survived).collect();
     println!("Survived: {}/{}", survived.len(), total_trials);
+
+    let output_file_name = "parm_search.out";
+    let mut file = File::create(output_file_name).expect("Failed to create output file");
+
+    if survived.is_empty() {
+        writeln!(file, "No runs survived.").unwrap();
+    } else {
+        writeln!(file, "Successful Runs ({}):", survived.len()).unwrap();
+        for res in &survived {
+            writeln!(file, "{}", serde_json::to_string(res).unwrap()).unwrap();
+        }
+    }
+    println!("Results saved to {}", output_file_name);
 
     if let Some(best) = survived.iter().max_by_key(|r| r.steps) {
         println!("\nBest Result (Longest Survival):");
