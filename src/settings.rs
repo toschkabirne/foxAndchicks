@@ -21,9 +21,9 @@ use std::sync::RwLock;
 // ----------------------------------------
 
 // Mutation / Bias params, only change the numbers, not the variables
-static ADD_NEURON: RwLock<f32> = RwLock::new(0.15);
-static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.60);
-static CHANGE_WEIGHT: RwLock<f32> = RwLock::new(0.60);
+static ADD_NEURON: RwLock<f32> = RwLock::new(0.14);
+static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.5);
+static CHANGE_WEIGHT: RwLock<f32> = RwLock::new(0.80);
 static BIAS: RwLock<f32> = RwLock::new(0.5);
 
 // This is the step size applied when an weight is changed
