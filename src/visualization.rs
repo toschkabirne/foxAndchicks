@@ -148,10 +148,18 @@ pub fn draw_population_graph_fullscreen(
     let pad_t = 55.0;
     let pad_b = 35.0;
 
+
+    // Additional space
+    let legend_h = 40.0;   // space for legend text
+    let bottom_margin = 20.0;
+
     let plot_x0 = area_x + pad_l;
     let plot_y0 = area_y + pad_t;
     let plot_w = (area_w - pad_l - pad_r).max(1.0);
-    let plot_h = (area_h - pad_t - pad_b).max(1.0);
+    let plot_h = (area_h - pad_t - pad_b - legend_h - bottom_margin).max(1.0);
+
+    let legend_y = plot_y0 + plot_h + legend_h - 10.0;
+
 
     // Axes
     draw_line(plot_x0, plot_y0, plot_x0, plot_y0 + plot_h, 2.0, Color::from_rgba(90, 90, 90, 255));
@@ -226,7 +234,6 @@ pub fn draw_population_graph_fullscreen(
     }
 
     // Legend
-    let legend_y = area_y + area_h - 10.0;
     draw_text("Predators", plot_x0, legend_y, 20.0, settings::PRED_COLOR);
     draw_text("Preys", plot_x0 + 150.0, legend_y, 20.0, settings::PREY_COLOR);
 }
@@ -262,10 +269,17 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
     let pad_t = 55.0;
     let pad_b = 35.0;
 
+    // Additional space
+    let legend_h = 40.0;   // space for legend text
+    let bottom_margin = 20.0;
+
     let plot_x0 = area_x + pad_l;
     let plot_y0 = area_y + pad_t;
     let plot_w = (area_w - pad_l - pad_r).max(1.0);
-    let plot_h = (area_h - pad_t - pad_b).max(1.0);
+    let plot_h = (area_h - pad_t - pad_b - legend_h - bottom_margin).max(1.0);
+
+    let legend_y = plot_y0 + plot_h + legend_h - 10.0;
+
 
     // Axes
     draw_line(
@@ -420,7 +434,6 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
     );
 
     // Legend
-    let legend_y = area_y + area_h - 10.0;
     draw_text("Predators", plot_x0, legend_y, 20.0, settings::PRED_COLOR);
     draw_text("Preys", plot_x0 + 150.0, legend_y, 20.0, settings::PREY_COLOR);
 }
