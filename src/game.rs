@@ -273,6 +273,7 @@ impl Game {
         Frame::new(&self.predators, &self.preys, self.frame_count)
     }
 
+    // this is used for profiling purposes
     pub fn next_frame_sequential(&mut self) -> Frame {
         self.frame_count += 1;
 
