@@ -24,6 +24,7 @@ pub struct Game {
     max_preys: usize,
     pub data_manager: Option<DataManager>,
     scratch_idxs: Vec<usize>,
+    rng: StdRng,
 }
 
 impl Game {
@@ -97,8 +98,9 @@ impl Game {
         num_preys: usize,
         max_preds: usize,
         max_preys: usize,
+        seed: u64,
     ) -> Self {
-        let mut rng = StdRng::seed_from_u64(settings::SEED);
+        let mut rng = StdRng::seed_from_u64(seed);
 
         // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
         let predators: Vec<Predator> = (0..num_preds)
@@ -145,6 +147,7 @@ impl Game {
             max_preys: max_preys,
             data_manager,
             scratch_idxs: Vec::new(),
+            rng,
         }
     }
 
@@ -156,6 +159,7 @@ impl Game {
             settings::PREY_INIT_NUMB,
             settings::MAX_PRED_COUNT,
             settings::MAX_PREY_COUNT,
+            settings::SEED,
         )
     }
 
@@ -195,7 +199,7 @@ impl Game {
         // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
         let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
         let mut newborn_preds: Vec<Predator> = Vec::new();
-        let mut rng = StdRng::seed_from_u64(settings::SEED);
+        // let mut rng = StdRng::seed_from_u64(settings::SEED);
 
         for pred in self.predators.iter_mut() {
             // Hunt near new position (preys haven't moved yet)
@@ -209,7 +213,7 @@ impl Game {
                 self.scratch_idxs.iter().filter_map(|&i| self.preys.get(i)),
                 &mut eaten_prey_ids,
                 &mut newborn_preds,
-                &mut rng,
+                &mut self.rng,
             );
         }
 
@@ -259,12 +263,146 @@ impl Game {
 
         for prey in self.preys.iter_mut() {
             let has_slot = newborn_preys.len() < allowed_newborns;
-            if let Some(child) = prey.reproduce(&mut rng, has_slot) {
+            if let Some(child) = prey.reproduce(&mut self.rng, has_slot) {
                 newborn_preys.push(child);
             }
         }
 
         self.preys.extend(newborn_preys);
+
+        Frame::new(&self.predators, &self.preys, self.frame_count)
+    }
+
+    pub fn next_frame_sequential(&mut self) -> Frame {
+        self.frame_count += 1;
+
+        // ----------------------------
+        // PREDATOR PHASE
+        // ----------------------------
+
+        {
+            coarse_prof::profile!("Predator Phase");
+
+            // Build PREY hash (preys are still at "start of frame" positions)
+            {
+                coarse_prof::profile!("Pred: Rebuild Prey Hash");
+                self.spatial_hash_preys.rebuild_from(&self.preys);
+            }
+
+            // SEQUENTIAL: Sense and move predators
+            // Predators query prey_hash
+
+            {
+                coarse_prof::profile!("Pred: Sense & Move");
+                let preys = &self.preys;
+                let hash_preys = &self.spatial_hash_preys;
+                let scratch = &mut self.scratch_idxs;
+                let predators = &mut self.predators;
+
+                for pred in predators.iter_mut() {
+                    if pred.repro_cooldown > 0 {
+                        pred.repro_cooldown -= 1;
+                    }
+
+                    {
+                        coarse_prof::profile!("Pred: Spatial Query");
+                        hash_preys.query_into(scratch, pred.core.pos.x, pred.core.pos.y);
+                    }
+
+                    let inputs = {
+                        coarse_prof::profile!("Pred: NN Eval");
+                        pred.get_inputs(scratch.iter().filter_map(|&i| preys.get(i)))
+                    };
+
+                    {
+                        coarse_prof::profile!("Pred: Physics");
+                        pred.move_step(&inputs);
+                    }
+                }
+            }
+
+            // SEQUENTIAL: Hunting phase
+            let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
+            let mut newborn_preds: Vec<Predator> = Vec::new();
+
+            {
+                coarse_prof::profile!("Pred: Hunt");
+                for pred in self.predators.iter_mut() {
+                    self.spatial_hash_preys.query_into(
+                        &mut self.scratch_idxs,
+                        pred.core.pos.x,
+                        pred.core.pos.y,
+                    );
+
+                    pred.hunt_nearby(
+                        self.scratch_idxs.iter().filter_map(|&i| self.preys.get(i)),
+                        &mut eaten_prey_ids,
+                        &mut newborn_preds,
+                        &mut self.rng,
+                    );
+                }
+            }
+
+            // Remove dead predators and add newborns
+            self.predators.retain(|pred| pred.core.energy > 0.0);
+
+            let free_slots = self.max_predators.saturating_sub(self.predators.len());
+            if free_slots > 0 {
+                self.predators
+                    .extend(newborn_preds.into_iter().take(free_slots));
+            }
+
+            // Remove eaten preys BEFORE prey phase
+            if !eaten_prey_ids.is_empty() {
+                self.preys
+                    .retain(|prey| !eaten_prey_ids.contains(&prey.core.id));
+            }
+        }
+
+        // ----------------------------
+        // PREY PHASE
+        // ----------------------------
+
+        {
+            coarse_prof::profile!("Prey Phase");
+
+            // Build PREDATOR hash (AFTER predator movement/removal)
+            {
+                coarse_prof::profile!("Prey: Rebuild Pred Hash");
+                self.spatial_hash_preds.rebuild_from(&self.predators);
+            }
+
+            // SEQUENTIAL: Sense and move preys
+            {
+                coarse_prof::profile!("Prey: Sense & Move");
+                let preds = &self.predators;
+                let hash_preds = &self.spatial_hash_preds;
+                let scratch = &mut self.scratch_idxs;
+                let preys = &mut self.preys;
+
+                for prey in preys.iter_mut() {
+                    hash_preds.query_into(scratch, prey.core.pos.x, prey.core.pos.y);
+                    let inputs = prey.get_inputs(scratch.iter().filter_map(|&i| preds.get(i)));
+                    prey.move_step(&inputs);
+                }
+            }
+
+            // SEQUENTIAL: Reproduction phase
+            let allowed_newborns = self.max_preys.saturating_sub(self.preys.len());
+            let mut newborn_preys: Vec<Prey> = Vec::new();
+
+            {
+                coarse_prof::profile!("Prey: Reproduce");
+                for prey in self.preys.iter_mut() {
+                    let has_slot = newborn_preys.len() < allowed_newborns;
+                    if let Some(child) = prey.reproduce(&mut self.rng, has_slot) {
+                        newborn_preys.push(child);
+                    }
+                }
+            }
+
+            self.preys.extend(newborn_preys);
+        }
 
         Frame::new(&self.predators, &self.preys, self.frame_count)
     }
@@ -421,7 +559,7 @@ mod tests {
     fn test_spatial_hash_fov_inclusion() {
         // Setup: Predator at (500, 500), Prey at (500 + 100, 500)
         // Sight range 170. Prey is within range.
-        let mut game = Game::new(None, 1, 1, 10, 10);
+        let mut game = Game::new(None, 1, 1, 10, 10, settings::SEED);
 
         // Move predator to center
         game.predators[0].core.set_xy(500.0, 500.0);
@@ -452,7 +590,7 @@ mod tests {
         // We want to verify that the predator's fine-grained sensing logic
         // correctly excludes it even if the spatial hash returns it as a candidate.
 
-        let mut game = Game::new(None, 1, 1, 10, 10);
+        let mut game = Game::new(None, 1, 1, 10, 10, settings::SEED);
 
         // Move predator to center
         game.predators[0].core.set_xy(500.0, 500.0);
@@ -492,7 +630,7 @@ mod tests {
         // Predator FOV is 90 deg (±45 deg).
         // The prey should be OUTSIDE FOV but INSIDE spatial hash neighborhood.
 
-        let mut game = Game::new(None, 1, 1, 10, 10);
+        let mut game = Game::new(None, 1, 1, 10, 10, settings::SEED);
 
         // Facing East
         game.predators[0].core.set_xy(500.0, 500.0);
@@ -529,8 +667,8 @@ mod tests {
     #[test]
     fn test_determinism_with_seed() {
         // Create two games with the same seed
-        let mut game1 = Game::new(None, 5, 10, 50, 100);
-        let mut game2 = Game::new(None, 5, 10, 50, 100);
+        let mut game1 = Game::new(None, 5, 10, 50, 100, 12345);
+        let mut game2 = Game::new(None, 5, 10, 50, 100, 12345);
 
         // Run 10 frames on both games
         for _ in 0..10 {

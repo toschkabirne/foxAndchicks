@@ -243,6 +243,131 @@ impl AnimalCore {
 
         inputs
     }
+    pub fn sense_animals_optimized<'a, I, T>(
+        core: &AnimalCore,
+        enemies: I,
+        number_sights: usize,
+        sight_range: f32,
+        sight_angle: f32,
+        enemy_radius: f32,
+        inputs: &mut [f32],
+    ) where
+        I: IntoIterator<Item = &'a T>,
+        T: HasCore + 'a,
+    {
+        debug_assert!(number_sights > 0);
+
+        if inputs.is_empty() {
+            return;
+        }
+
+        // clamp n to available buffer length
+        let n = number_sights.max(1).min(inputs.len());
+
+        for v in &mut inputs[..n] {
+            *v = 0.0;
+        }
+
+        let mut remaining = n;
+
+        let cone_half = (sight_angle * 0.5).to_radians();
+        debug_assert!(cone_half.is_finite() && cone_half > 0.0 && cone_half < std::f32::consts::PI);
+
+        let animal_pos = core.pos;
+        let world_w = SCREEN_WIDTH as f32;
+        let world_h = SCREEN_HEIGHT as f32;
+
+        let step = if n > 1 {
+            (2.0 * cone_half) / ((n - 1) as f32)
+        } else {
+            0.0
+        };
+        debug_assert!(n == 1 || (step.is_finite() && step > 0.0));
+
+        let mut candidates: Vec<(f32, f32, f32)> = Vec::new();
+
+        for enemy in enemies {
+            let enemy_pos = enemy.core().pos;
+
+            let delta = wrapped_distance_vector(animal_pos, enemy_pos, world_w, world_h);
+            let dist = delta.length();
+
+            if dist == 0.0 || dist >= sight_range {
+                continue;
+            }
+
+            let angle_to_enemy = delta.y.atan2(delta.x);
+            let center_offset = normalize_angle(angle_to_enemy - core.angle);
+            let angular_width = enemy_radius.atan2(dist);
+
+            if center_offset.abs() > (cone_half + angular_width) {
+                continue;
+            }
+
+            candidates.push((dist, center_offset, angular_width));
+        }
+
+        candidates.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        for (_dist, center_offset, angular_width) in candidates {
+            if remaining == 0 {
+                break;
+            }
+
+            let mut start = center_offset - angular_width;
+            let mut end = center_offset + angular_width;
+
+            if start < -cone_half {
+                start = -cone_half;
+            }
+            if end > cone_half {
+                end = cone_half;
+            }
+
+            if start > end {
+                continue;
+            }
+
+            if n == 1 {
+                if start <= 0.0 && 0.0 <= end && inputs[0] == 0.0 {
+                    inputs[0] = 1.0;
+                    remaining = 0;
+                }
+                continue;
+            }
+
+            let i_min_f = (start + cone_half) / step;
+            let i_max_f = (end + cone_half) / step;
+
+            if !i_min_f.is_finite() || !i_max_f.is_finite() {
+                continue;
+            }
+
+            let mut i_min = i_min_f.ceil() as isize;
+            let mut i_max = i_max_f.floor() as isize;
+
+            if i_min < 0 {
+                i_min = 0;
+            }
+            if i_max > (n as isize - 1) {
+                i_max = n as isize - 1;
+            }
+
+            if i_min > i_max {
+                continue;
+            }
+
+            for i in (i_min as usize)..=(i_max as usize) {
+                if inputs[i] == 0.0 {
+                    inputs[i] = 1.0;
+                    remaining -= 1;
+                    if remaining == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Creates a child brain from a parent brain with random mutations.
@@ -529,6 +654,21 @@ impl Predator {
             PRED_SIGHT_RANGE,
             PRED_SIGHT_ANGLE,
             PREY_RADIUS,
+        )
+    }
+
+    pub fn get_inputs_optimized<'a, I>(&self, preys: I, inputs: &mut [f32])
+    where
+        I: IntoIterator<Item = &'a Prey>,
+    {
+        AnimalCore::sense_animals_optimized(
+            &self.core,
+            preys,
+            PRED_SIGHT_COUNT,
+            PRED_SIGHT_RANGE,
+            PRED_SIGHT_ANGLE,
+            PREY_RADIUS,
+            inputs,
         )
     }
 }

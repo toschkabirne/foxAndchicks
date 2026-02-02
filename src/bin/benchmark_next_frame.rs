@@ -8,6 +8,7 @@
 
 use predator_vs_prey::game::Game as ScratchGame;
 use predator_vs_prey::game_heat_allo::Game as HeapGame;
+use predator_vs_prey::settings;
 use std::env;
 use std::fs::File;
 use std::io::Write;
@@ -173,6 +174,7 @@ fn benchmark_scratch(config: &BenchConfig, warmup: usize) -> Vec<Duration> {
             config.num_preys,
             config.num_preds * 10,
             config.num_preys * 10,
+            settings::SEED,
         );
         for _ in 0..10 {
             let _ = game.next_frame();
@@ -187,6 +189,7 @@ fn benchmark_scratch(config: &BenchConfig, warmup: usize) -> Vec<Duration> {
             config.num_preys,
             config.num_preds * 10,
             config.num_preys * 10,
+            settings::SEED,
         );
 
         let start = Instant::now();
@@ -210,6 +213,7 @@ fn benchmark_heap(config: &BenchConfig, warmup: usize) -> Vec<Duration> {
             config.num_preys,
             config.num_preds * 10,
             config.num_preys * 10,
+            settings::SEED,
         );
         for _ in 0..10 {
             let _ = game.next_frame();
@@ -224,6 +228,7 @@ fn benchmark_heap(config: &BenchConfig, warmup: usize) -> Vec<Duration> {
             config.num_preys,
             config.num_preds * 10,
             config.num_preys * 10,
+            settings::SEED,
         );
 
         let start = Instant::now();
@@ -237,9 +242,22 @@ fn benchmark_heap(config: &BenchConfig, warmup: usize) -> Vec<Duration> {
 }
 
 fn verify_determinism(num_preds: usize, num_preys: usize, frames: usize) {
-    let mut scratch_game =
-        ScratchGame::new(None, num_preds, num_preys, num_preds * 10, num_preys * 10);
-    let mut heap_game = HeapGame::new(None, num_preds, num_preys, num_preds * 10, num_preys * 10);
+    let mut scratch_game = ScratchGame::new(
+        None,
+        num_preds,
+        num_preys,
+        num_preds * 10,
+        num_preys * 10,
+        settings::SEED,
+    );
+    let mut heap_game = HeapGame::new(
+        None,
+        num_preds,
+        num_preys,
+        num_preds * 10,
+        num_preys * 10,
+        settings::SEED,
+    );
 
     for _ in 0..frames {
         let _ = scratch_game.next_frame();

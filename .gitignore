@@ -19,4 +19,5 @@ nn_signal_analysis.md
 nn_signal_analysis.csv
 /.venv
 *.tex
-/tests
+parmparm_search.out
+grid_search_results.txt

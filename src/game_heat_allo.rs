@@ -46,8 +46,9 @@ impl Game {
         num_preys: usize,
         max_preds: usize,
         max_preys: usize,
+        seed: u64,
     ) -> Self {
-        let mut rng = StdRng::seed_from_u64(settings::SEED);
+        let mut rng = StdRng::seed_from_u64(seed);
 
         // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
         let predators: Vec<Predator> = (0..num_preds)
@@ -105,6 +106,7 @@ impl Game {
             settings::PREY_INIT_NUMB,
             settings::MAX_PRED_COUNT,
             settings::MAX_PREY_COUNT,
+            settings::SEED,
         )
     }
 

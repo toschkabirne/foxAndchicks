@@ -24,7 +24,7 @@ const FULLY_CONNECTED: bool = false;
 /// Design rationale: Sigmoid squashes values to (0, 1) range. The parameters
 /// (a = 1.5, b = 0.0) control steepness and offset.
 pub fn sigmoid(x: f32) -> f32 {
-    let a = 3.0; // steepness of curve
+    let a = 4.0; // steepness of curve
     let b = 3.0; // offset of curve
     1.0 / (1.0 + (-x * a + b).exp())
 }
@@ -417,7 +417,7 @@ impl NeuralNetwork {
 
         if !connected {
             // Check cycles
-            if !self.infinity_loop(source, target) {
+            if !self.kahn_algorithm(source, target) {
                 self.add_connection(source, target, None, rng);
             }
         }
@@ -535,6 +535,85 @@ impl NeuralNetwork {
 
             self.eval_order = sample_order;
             false
+        } else {
+            false
+        }
+    }
+
+    /// Optimized Kahn's algorithm for cycle detection.
+    /// Equivalent to infinity_loop behavior.
+    pub fn kahn_algorithm(&mut self, source: usize, target: usize) -> bool {
+        let in_bi = self.num_inputs + 1;
+        let in_bi_out = in_bi + self.num_outputs;
+        let hidden_start = in_bi_out;
+
+        // Check if both are hidden nodes
+        if source >= in_bi_out && target >= in_bi_out {
+            // Map global indices to 0..hidden_count range
+            // Global index `g` -> Local index `g - hidden_start`
+            // Row in hidden_matrix: `target - in_bi`
+            // Col in hidden_matrix: `source - hidden_start`
+
+            let hidden_count = self.neuron_number - hidden_start;
+
+            // 1. Temporarily add edge (Side effect preserved)
+            self.hidden_matrix[target - in_bi][source - hidden_start] = 1.0;
+
+            // 2. Build Adjacency List & In-Degree for HIDDEN sub-graph
+            let mut adj = vec![Vec::new(); hidden_count];
+            let mut in_degree = vec![0; hidden_count];
+
+            // Iterate only over hidden rows in hidden_matrix
+            // Rows: self.num_outputs .. (self.num_outputs + hidden_count)
+            for r_local in 0..hidden_count {
+                let r_matrix = self.num_outputs + r_local;
+                // r_matrix is index in hidden_matrix
+                // Corresponds to node `hidden_start + r_local`
+
+                for (c_local, &w) in self.hidden_matrix[r_matrix].iter().enumerate() {
+                    if w != 0.0 {
+                        // Edge from c_local to r_local
+                        adj[c_local].push(r_local);
+                        in_degree[r_local] += 1;
+                    }
+                }
+            }
+
+            // 3. Kahn's Algorithm
+            let mut queue = Vec::new();
+            for i in 0..hidden_count {
+                if in_degree[i] == 0 {
+                    queue.push(i);
+                }
+            }
+
+            let mut sorted_order = Vec::with_capacity(hidden_count);
+
+            while let Some(u) = queue.pop() {
+                sorted_order.push(u);
+
+                for &v in &adj[u] {
+                    in_degree[v] -= 1;
+                    if in_degree[v] == 0 {
+                        queue.push(v);
+                    }
+                }
+            }
+
+            if sorted_order.len() < hidden_count {
+                // Cycle detected
+                // Revert dummy edge
+                self.hidden_matrix[target - in_bi][source - hidden_start] = 0.0;
+                true
+            } else {
+                // No cycle. Update eval_order.
+                // eval_order expects indices in 'activations' list (relative to output start?)
+                // infinity_loop pushes `i` from `index_list`.
+                // `index_list` initialized with `(self.num_outputs..ot_hi)`
+                // So `sorted_order` (0..hidden_count) needs to be mapped back to `self.num_outputs..`
+                self.eval_order = sorted_order.iter().map(|&x| x + self.num_outputs).collect();
+                false
+            }
         } else {
             false
         }
