@@ -519,6 +519,7 @@ impl Predator {
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
         // threshold for moving, and if low on energy, stop moving, gain energy
         if speed_factor < THRESHOLD_PRED {
+            self.core.survived_iters += 1;
             return; // Dont move under treshhold
         }
 
@@ -768,6 +769,7 @@ impl Prey {
         // threshold for moving, and if low on energy, stop moving, gain energy
         if speed_factor < THRESHOLD_PREY || self.core.energy < 0.02 * PREY_ENERGY {
             // moving threshold, rests and gains energy
+            self.core.survived_iters += 1;
             self.core.energy = (self.core.energy + PREY_REST_ENERGY_GAIN).min(PREY_ENERGY);
             return; // Don't move while resting
         }
