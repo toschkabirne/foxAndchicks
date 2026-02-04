@@ -515,10 +515,8 @@ impl Predator {
         // Extract and clamp movement parameters
         let speed_factor = outputs[0].clamp(0.0, 1.0);
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
-
-        let threshold = THRESHOLD_PRED;
         // threshold for moving, and if low on energy, stop moving, gain energy
-        if speed_factor < threshold {
+        if speed_factor < THRESHOLD_PRED {
             return; // Dont move under treshhold
         }
 
@@ -763,11 +761,9 @@ impl Prey {
         assert!(energy_ratio >= 0.0 && energy_ratio <= 1.0);
 
         let speed_factor = outputs[0].clamp(0.0, 1.0);
-
         // *THIS CAN BE ADAPTED*
-        let threshold = THRESHOLD_PREY;
         // threshold for moving, and if low on energy, stop moving, gain energy
-        if speed_factor < threshold || self.core.energy < 0.02 * PREY_ENERGY {
+        if speed_factor < THRESHOLD_PREY || self.core.energy < 0.02 * PREY_ENERGY {
             // moving threshold, rests and gains energy
             self.core.energy = (self.core.energy + PREY_REST_ENERGY_GAIN).min(PREY_ENERGY);
             return; // Don't move while resting
