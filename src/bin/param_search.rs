@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::fs;
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct Params {
@@ -41,6 +42,14 @@ struct SimResult {
     error: Option<String>,
 }
 
+fn write_results(results_file: &str, results: &Vec<SimResult>) {
+    if let Ok(json) = serde_json::to_string_pretty(results) {
+        let tmp_file = format!("{}.tmp", results_file);
+        let _ = fs::write(&tmp_file, json);
+        let _ = fs::rename(&tmp_file, results_file);
+    }
+}
+
 fn generate_grid_params() -> Vec<Params> {
     let mut params_list = Vec::new();
 
@@ -55,7 +64,7 @@ fn generate_grid_params() -> Vec<Params> {
     let change_weights: Vec<f32> = vec![0.68, 0.7, 0.8];
 
     // mutation: 20, 30, 40 (for both pred and prey init mut)
-    let mutations: Vec<usize> = vec![10, 5, 15];
+    let mutations: Vec<usize> = vec![10, 15];
 
     // Three different seeds for testing
     let seeds: Vec<u64> = vec![420, 12345, 61212];
@@ -182,54 +191,54 @@ fn main() {
         .arg("headless_runner")
         .status();
 
-    let mut results: Vec<SimResult> = params_to_test
-        .par_iter()
-        .map(|&params| {
-            if let Some(res) = run_trial(params) {
-                let status = if res.survived {
-                    "SURVIVED".green()
-                } else {
-                    "DIED    ".red()
-                };
+    let results_file = "param_search_results.json";
+    let results_shared = Arc::new(Mutex::new(previous_results));
+    {
+        let initial = results_shared.lock().unwrap().clone();
+        write_results(results_file, &initial);
+    }
 
-                println!(
-                    "[{}] Steps: {:<5} | Preds:{}/{} Preys:{}/{} | AddN:{:.2} AddW:{:.1} ChngW:{:.1} Mut:{} Seed:{}",
-                    status,
-                    res.steps,
-                    res.final_predators,
-                    params.max_pred_count.unwrap_or(0),
-                    res.final_preys,
-                    params.max_prey_count.unwrap_or(0),
-                    params.add_neuron.unwrap_or(0.0),
-                    params.add_weight.unwrap_or(0.0),
-                    params.change_weight.unwrap_or(0.0),
-                    params.pred_init_mut.unwrap_or(0),
-                    params.seed.unwrap_or(0)
-                );
-                res
-            } else {
-                println!("{}", "ERROR: Run failed".red());
-                SimResult {
-                    survived: false,
-                    steps: 0,
-                    avg_step_time: 0.0,
-                    final_predators: 0,
-                    final_preys: 0,
-                    parameters: json!(params),
-                    error: Some("Run failed".to_string()),
-                }
+    params_to_test.par_iter().for_each(|&params| {
+        let res = if let Some(res) = run_trial(params) {
+            let status = if res.survived { "SURVIVED".green() } else { "DIED    ".red() };
+            println!(
+                "[{}] Steps: {:<5} | Preds:{}/{} Preys:{}/{} | AddN:{:.2} AddW:{:.1} ChngW:{:.1} Mut:{} Seed:{}",
+                status,
+                res.steps,
+                res.final_predators,
+                params.max_pred_count.unwrap_or(0),
+                res.final_preys,
+                params.max_prey_count.unwrap_or(0),
+                params.add_neuron.unwrap_or(0.0),
+                params.add_weight.unwrap_or(0.0),
+                params.change_weight.unwrap_or(0.0),
+                params.pred_init_mut.unwrap_or(0),
+                params.seed.unwrap_or(0)
+            );
+            res
+        } else {
+            println!("{}", "ERROR: Run failed".red());
+            SimResult {
+                survived: false,
+                steps: 0,
+                avg_step_time: 0.0,
+                final_predators: 0,
+                final_preys: 0,
+                parameters: json!(params),
+                error: Some("Run failed".to_string()),
             }
-        })
-        .collect();
+        };
 
-    // Merge with previous results
-    results.extend(previous_results);
+        let mut guard = results_shared.lock().unwrap();
+        guard.push(res);
+        write_results(results_file, &guard);
+    });
+
+    let results = results_shared.lock().unwrap().clone();
     
     // Save all results to file
-    if let Ok(json) = serde_json::to_string_pretty(&results) {
-        let _ = fs::write(results_file, json);
-        println!("Results saved to {}", results_file);
-    }
+    write_results(results_file, &results);
+    println!("Results saved to {}", results_file);
 
     println!("\n\nSearch complete. Analyzing results...");
 
