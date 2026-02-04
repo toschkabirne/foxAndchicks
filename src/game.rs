@@ -38,11 +38,19 @@ impl Game {
     }
 
     pub fn longest_pred_lifespan(&self) -> i32 {
-        self.predators.iter().map(|p| p.core.survived_iters).max().unwrap_or(0)
+        self.predators
+            .iter()
+            .map(|p| p.core.survived_iters)
+            .max()
+            .unwrap_or(0)
     }
 
     pub fn longest_prey_lifespan(&self) -> i32 {
-        self.preys.iter().map(|p| p.core.survived_iters).max().unwrap_or(0)
+        self.preys
+            .iter()
+            .map(|p| p.core.survived_iters)
+            .max()
+            .unwrap_or(0)
     }
 
     /// Returns the actual filename (with timestamp) used for storing data, if any
