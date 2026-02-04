@@ -111,6 +111,7 @@ pub struct AnimalCore {
     pub energy: f32,
     /// Neural network brain that controls decision-making, each animal owns its brain
     pub brain: NeuralNetwork,
+    pub survived_iters: i32,
 }
 
 pub trait HasCore {
@@ -138,6 +139,7 @@ impl AnimalCore {
             angle,
             energy,
             brain,
+            survived_iters: 0,
         }
     }
 
@@ -530,6 +532,7 @@ impl Predator {
             PRED_SPEED,
             PRED_MOVING_DECAY,
         );
+        self.core.survived_iters += 1;
     }
 
     /// Checks for nearby prey and attempts to eat them
@@ -786,6 +789,7 @@ impl Prey {
             PREY_SPEED,
             PREY_MOVING_DECAY,
         );
+        self.core.survived_iters += 1;
     }
 
     /// Attempts to reproduce, creating an offspring if conditions are met.

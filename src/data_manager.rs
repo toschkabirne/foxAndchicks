@@ -348,6 +348,7 @@ pub struct AnimalState {
     pub y: f32,
     pub angle: f32,
     pub animal_type: AnimalType,
+
 }
 
 ////////////////////////

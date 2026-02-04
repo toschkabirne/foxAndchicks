@@ -23,6 +23,8 @@ pub struct Game {
     max_preys: usize,
     pub data_manager: Option<DataManager>,
     scratch_idxs: Vec<usize>,
+    longest_pred_lifespan: i32,
+    longest_prey_lifespan: i32,
 }
 
 impl Game {
@@ -95,6 +97,8 @@ impl Game {
             max_preys: max_preys,
             data_manager,
             scratch_idxs: Vec::new(),
+            longest_pred_lifespan: 0,
+            longest_prey_lifespan: 0,
         }
     }
 
@@ -292,7 +296,7 @@ impl Game {
             draw_frame(frame, draw_sight_lines, None);
 
             let (pred_count, prey_count) = frame.counts();
-            draw_game_stats(pred_count, prey_count, frame.tick);
+            draw_game_stats(pred_count, prey_count, frame.tick, 0, 0);
 
             draw_playback_controls(&mut playback_state, total_frames);
 

@@ -158,7 +158,7 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
                     }
                 }
 
-                draw_game_stats(pred_count, prey_count, game.frame_count);
+                draw_game_stats(pred_count, prey_count, game.frame_count, game.longest_pred_lifespan, game.longest_prey_lifespan);
 
                 if graph_on {
                     draw_text(
@@ -173,7 +173,7 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
 
             ViewMode::Graph => {
                 draw_population_graph_fullscreen_live(&pop_history);
-                draw_game_stats(pred_count, prey_count, game.frame_count);
+                draw_game_stats(pred_count, prey_count, game.frame_count, game.longest_pred_lifespan, game.longest_prey_lifespan);
             }
         }
 
