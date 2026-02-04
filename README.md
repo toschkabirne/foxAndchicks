@@ -123,14 +123,12 @@ cargo run --release --bin benchmark_next_frame -- [OPTIONS]
 **Arguments:**
 - `--iterations <N>`: Number of benchmark iterations (default: 10).
 - `--warmup <N>`: Warmup iterations before timing (default: 5).
-- `--frames <N>`: Frames per measurement (default: 100).
-- `--csv <path>`: Output CSV file path.
-- `--markdown <path>`: Output markdown report path.
+- `--frames <N>`: Frames per measurement (default: 500).
+- `--output <path>`: Base path for output files (creates `<path>.csv` and `<path>.md`). Default: `benchmark_results`.
 
 **Output:**
 - CSV file with detailed timing statistics.
 - Markdown report with performance comparison tables.
-- Use `plot_benchmark.ipynb` to visualize results.
 
 ### 7. Neural Network Signal Analysis
 Analyze neural network activations and signal propagation.
@@ -139,6 +137,19 @@ Analyze neural network activations and signal propagation.
 ```bash
 cargo run --release --bin nn_signal_analysis
 ```
+
+### 8. Profiling
+Analyze the runtime performance of the simulation using `coarse_prof`.
+
+**Command:**
+```bash
+cargo run --release --bin profile_game
+```
+
+**Details:**
+- Runs a fixed scenario: 200 Predators, 400 Prey, 2000 Frames.
+- Outputs a hierarchical breakdown of execution time to standard output.
+- Useful for identifying bottlenecks in `next_frame`, `get_inputs`, or `move_step`.
  
  ## 🧠 Brain & Evolution
 
