@@ -17,7 +17,7 @@ use rand::Rng;
 // These functions transform neuron activations, introducing non-linearity
 // which is essential for neural networks to learn complex behaviors.
 // ============================================================================
-const WEIGHT: f32 = 0.3;
+const WEIGHT: f32 = 1.0;
 const FULLY_CONNECTED: bool = false;
 /// Sigmoid activation with adjustable steepness.
 ///

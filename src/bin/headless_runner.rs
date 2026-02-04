@@ -28,6 +28,8 @@ struct Params {
     pred_init_numb: Option<usize>,
     #[serde(rename = "PREY_INIT_NUMB")]
     prey_init_numb: Option<usize>,
+    #[serde(rename = "SEED")]
+    seed: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -133,13 +135,14 @@ fn run_simulation(params_raw: &serde_json::Value, max_steps: i64) -> SimResult {
     }
 
     // Create game using your encapsulated logic
+    let seed = params.seed.unwrap_or(settings::SEED);
     let mut game = Game::new(
         None, // DataManager is not used in headless mode
-        params.max_pred_count.unwrap(),
-        params.max_prey_count.unwrap(),
         params.pred_init_numb.unwrap(),
         params.prey_init_numb.unwrap(),
-        settings::SEED,
+        params.max_pred_count.unwrap(),
+        params.max_prey_count.unwrap(),
+        seed,
     );
 
     let start = Instant::now();

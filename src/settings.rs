@@ -21,28 +21,34 @@ use std::sync::RwLock;
 // ----------------------------------------
 
 // Mutation / Bias params, only change the numbers, not the variables
-static ADD_NEURON: RwLock<f32> = RwLock::new(0.15);
-static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.60);
-static CHANGE_WEIGHT: RwLock<f32> = RwLock::new(0.60);
+// Adjusted to match YouTube implementation:
+// - new_node_proba: 0.05 (5% chance to add node)
+// - new_conn_proba: 0.7 (70% chance to add connection)
+// - offset_weight_proba: 0.5 (50% chance to mutate weight)
+// - offset_bias_proba: 0.2 (20% chance to mutate bias)
+static ADD_NEURON: RwLock<f32> = RwLock::new(0.13);
+static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.5);
+static CHANGE_WEIGHT: RwLock<f32> = RwLock::new(0.8);
 static BIAS: RwLock<f32> = RwLock::new(0.5);
 
-// This is the step size applied when an weight is changed
+// This is the step size applied when a weight is changed
 pub const MUT_CHANGE_STEP: f32 = 0.05;
-static PREY_INIT_MUT: RwLock<usize> = RwLock::new(20);
-static PRED_INIT_MUT: RwLock<usize> = RwLock::new(20);
+// Initial mutations: YouTube uses 10, giving networks more initial structure
+static PREY_INIT_MUT: RwLock<usize> = RwLock::new(10);
+static PRED_INIT_MUT: RwLock<usize> = RwLock::new(10);
 
-pub const SEED: u64 = 61;
+pub const SEED: u64 = 61212;
 
-pub const PRED_INIT_NUMB: usize = 100;
-pub const PREY_INIT_NUMB: usize = 400;
+pub const PRED_INIT_NUMB: usize = 110;
+pub const PREY_INIT_NUMB: usize = 450;
 
-pub const MAX_PRED_COUNT: usize = 150;
-pub const MAX_PREY_COUNT: usize = 700;
+pub const MAX_PRED_COUNT: usize = 175;
+pub const MAX_PREY_COUNT: usize = 800;
 
-pub const PRED_SIGHT_RANGE: f32 = 150.0;
-pub const PREY_SIGHT_RANGE: f32 = 100.0;
+pub const PRED_SIGHT_RANGE: f32 = 500.0;
+pub const PREY_SIGHT_RANGE: f32 = 250.0;
 
-pub const MAX_TURN_ANGLE: f32 = std::f32::consts::FRAC_PI_4;
+pub const MAX_TURN_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
 
 pub const SCREEN_WIDTH: i32 = 1000;
 pub const SCREEN_HEIGHT: i32 = 1000;
@@ -55,26 +61,26 @@ pub const FRAMES_PER_SECOND: i32 = 30;
 // ----------------------------------------
 
 // This is the theoretical time, how long it needs to die (IN SECONDS)
-const PRED_LIFESPAN_REST: f32 = 40.0;
+const PRED_LIFESPAN_REST: f32 = 30.0;
 const PRED_LIFESPAN_SPRINT: f32 = 20.0;
 
 // Energy gain per eaten Prey, only change the number, not Pred_energy
 pub const PRED_ENERGY_GAIN: f32 = PRED_ENERGY * 0.4;
 
 // number of frames until reproduction cooldown is over
-pub const REPRO_COOLDOWN_FRAMES: i32 = 2 * FRAMES_PER_SECOND;
+pub const REPRO_COOLDOWN_FRAMES: i32 = 1 * FRAMES_PER_SECOND;
 
 // This is the theoretical time, how long it needs to cross the screen width
 pub const PRED_TIME_MOVE_DIST_WIDTH: f32 = 15.0;
 
 // ----------------------------------------
-//          PREY SPECIFIC parameters
+//          PREY parameters
 // ----------------------------------------
 
 // gains 0.25% of its energy per full virtuell rest second
-const PREY_ENERGY_GAIN_PER_REST_SEC: f32 = 0.25;
+const PREY_ENERGY_GAIN_PER_REST_SEC: f32 = 1.0;
 // seconds until birth
-const PREY_SECONDS_UNTIL_BIRTH: f32 = 16.0;
+const PREY_SECONDS_UNTIL_BIRTH: f32 = 14.0;
 
 // seconds until 0 energy in full sprint
 const PREY_LIFESPAN_SPRINT: f32 = 20.0;
@@ -92,13 +98,13 @@ const PREY_LIFESPAN_SPRINT: f32 = 20.0;
 pub const PREY_SIGHT_COUNT: usize = 36;
 pub const PRED_SIGHT_COUNT: usize = 24;
 
-pub const PREY_SIGHT_ANGLE: f32 = 300.0;
+pub const PREY_SIGHT_ANGLE: f32 = 320.0;
 pub const PRED_SIGHT_ANGLE: f32 = 60.0;
 
-pub const PRED_RADIUS: f32 = 10.0;
-pub const PREY_RADIUS: f32 = 7.0;
+pub const PRED_RADIUS: f32 = 5.0;
+pub const PREY_RADIUS: f32 = 3.0;
 
-pub const DEFAULT_TOTAL_FRAMES: i32 = 2000;
+pub const DEFAULT_TOTAL_FRAMES: i32 = 40000;
 
 // REAC = False, not in use, but could later be used for changing acitvation functions in NN
 pub const REAC: bool = false;
@@ -110,9 +116,9 @@ pub const BACKGROUND_COLOR: Color = BLACK;
 pub const DEFAULT_DATA_FILE: &str = "simulation_data.bin";
 
 pub const PRED_ENERGY: f32 = 100.0;
-pub const PREY_ENERGY: f32 = 50.0;
+pub const PREY_ENERGY: f32 = 100.0;
 
-pub const PREY_SPEED: f32 = 0.8 * PRED_SPEED;
+pub const PREY_SPEED: f32 = 0.9 * PRED_SPEED;
 
 // ----------------------------------------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------------------------------------------

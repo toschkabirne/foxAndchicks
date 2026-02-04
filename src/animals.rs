@@ -163,9 +163,11 @@ impl AnimalCore {
 
 /// Computes sensory inputs for the animal's neural network.
 ///
-/// Animals have forward-facing "cone vision" covering ±30° from their heading.
-/// The cone is divided into NUMBER_SIGHTS rays, each acting as a
-/// boolean "prey detector" (1.0 if prey detected, 0.0 otherwise).
+/// Animals have forward-facing "cone vision" covering ±sight_angle from their heading.
+/// The cone is divided into NUMBER_SIGHTS rays, each returning a normalized distance value:
+/// - 1.0 if enemy is very close (distance = 0)
+/// - 0.0 if enemy is at max sight range or not detected
+/// - Values in between represent normalized proximity (closer = higher value)
 impl AnimalCore {
     pub fn sense_animals<'a, I, T>(
         core: &AnimalCore,
@@ -197,30 +199,27 @@ impl AnimalCore {
             assert!(enemy_pos.x >= 0.0 && enemy_pos.x <= SCREEN_WIDTH as f32);
             assert!(enemy_pos.y >= 0.0 && enemy_pos.y <= SCREEN_HEIGHT as f32);
 
-            // Compute shortest vector to prey (accounting for world wrapping)
+            // Compute shortest vector to enemy (accounting for world wrapping)
             let delta = wrapped_distance_vector(animal_pos, enemy_pos, world_w, world_h);
             let dist = delta.length();
             //
             assert!(dist >= 0.0);
 
-            // Skip if prey is too close (div-by-zero) or out of range
+            // Skip if enemy is too close (div-by-zero) or out of range
             if dist == 0.0 || dist >= sight_range {
                 continue;
             }
-            // Compute angle to prey using wrapped delta
+            // Compute angle to enemy using wrapped delta
             let angle_to_enemy = delta.y.atan2(delta.x);
             assert!(angle_to_enemy >= -PI && angle_to_enemy <= PI);
 
             let angular_width = (enemy_radius).atan2(dist);
-            //TODO: Is this correct?
-            //assert!(angular_width >= 0.0 && angular_width <= cone_half_angle);
+            // Normalize distance: 1.0 = very close, 0.0 = at max range
+            let normalized_proximity = 1.0 - (dist / sight_range);
+            assert!(normalized_proximity >= 0.0 && normalized_proximity <= 1.0);
 
-            // Check each vision ray to see if prey overlaps with it
+            // Check each vision ray to see if enemy overlaps with it
             for i in 0..n {
-                if inputs[i] == 1.0 {
-                    continue; // This ray already detected prey
-                }
-
                 // Interpolate angle for this ray within the vision cone
                 let t = if n > 1 {
                     i as f32 / (n as f32 - 1.0) // Map index to [0, 1]
@@ -233,10 +232,13 @@ impl AnimalCore {
                 let ray_angle = normalize_angle(core.angle + offset);
                 assert!(ray_angle >= -PI && ray_angle <= PI);
 
-                // Check if prey's angular disc overlaps this ray
+                // Check if enemy's angular disc overlaps this ray
                 let diff = normalize_angle(ray_angle - angle_to_enemy).abs();
                 if diff <= angular_width {
-                    inputs[i] = 1.0; // Prey detected on this ray!
+                    // Store the closest enemy's normalized distance for this ray
+                    if normalized_proximity > inputs[i] {
+                        inputs[i] = normalized_proximity;
+                    }
                 }
             }
         }
@@ -309,10 +311,14 @@ impl AnimalCore {
 
         candidates.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
-        for (_dist, center_offset, angular_width) in candidates {
+        for (dist, center_offset, angular_width) in candidates {
             if remaining == 0 {
                 break;
             }
+
+            // Normalize distance: 1.0 = very close, 0.0 = at max range
+            let normalized_proximity = 1.0 - (dist / sight_range);
+            debug_assert!(normalized_proximity >= 0.0 && normalized_proximity <= 1.0);
 
             let mut start = center_offset - angular_width;
             let mut end = center_offset + angular_width;
@@ -329,9 +335,13 @@ impl AnimalCore {
             }
 
             if n == 1 {
-                if start <= 0.0 && 0.0 <= end && inputs[0] == 0.0 {
-                    inputs[0] = 1.0;
-                    remaining = 0;
+                if start <= 0.0 && 0.0 <= end {
+                    if normalized_proximity > inputs[0] {
+                        inputs[0] = normalized_proximity;
+                        if inputs[0] >= 1.0 {
+                            remaining = 0;
+                        }
+                    }
                 }
                 continue;
             }
@@ -358,11 +368,14 @@ impl AnimalCore {
             }
 
             for i in (i_min as usize)..=(i_max as usize) {
-                if inputs[i] == 0.0 {
-                    inputs[i] = 1.0;
-                    remaining -= 1;
-                    if remaining == 0 {
-                        break;
+                // Store the closest enemy's normalized distance for this ray
+                if normalized_proximity > inputs[i] {
+                    inputs[i] = normalized_proximity;
+                    if inputs[i] >= 1.0 {
+                        remaining -= 1;
+                        if remaining == 0 {
+                            break;
+                        }
                     }
                 }
             }
@@ -389,12 +402,12 @@ fn inherited_brain_with_mutations<R: Rng>(parent: &NeuralNetwork, rng: &mut R) -
 #[inline]
 fn move_with_speed_factor(
     core: &mut AnimalCore,
-    speed_factor: f32, // change in speed
+    speed_factor: f32, // change in speed (negative = backwards)
     turn_delta: f32,   // change in angle
     speed: f32,        // base speed
     moving_decay: f32, // energy cost multiplier for movement
 ) {
-    assert!(speed_factor >= 0.0 && speed_factor <= 1.0);
+    assert!(speed_factor >= -1.0 && speed_factor <= 1.0);
     assert!(turn_delta >= -PI && turn_delta <= PI);
     //TODO: What range should speed be in?
     //assert!(speed >= 0.0 && speed <= 1.0);
@@ -403,7 +416,8 @@ fn move_with_speed_factor(
     core.angle = normalize_angle(core.angle + turn_delta);
     assert!(core.angle >= -PI && core.angle <= PI);
 
-    // Apply forward movement based on current heading
+    // Apply forward/backward movement based on current heading
+    // Negative speed_factor moves backwards
     core.pos.x += speed_factor * speed * core.angle.cos();
     core.pos.y += speed_factor * speed * core.angle.sin();
 
@@ -413,7 +427,8 @@ fn move_with_speed_factor(
     assert!(core.pos.x >= 0.0 && core.pos.x <= SCREEN_WIDTH as f32);
     assert!(core.pos.y >= 0.0 && core.pos.y <= SCREEN_HEIGHT as f32);
     // Deduct energy cost (quadratic in speed for realism)
-    let v = speed_factor;
+    // Use abs() so backwards movement also costs energy
+    let v = speed_factor.abs();
     core.energy -= PRED_MOVING_DECAY * v.sqrt();
     //TODO: Is negative energy allowed here?
     //assert!(core.energy >= 0.0);
@@ -513,12 +528,14 @@ impl Predator {
         let outputs = self.core.brain.forward_vectorized(inputs, energy_ratio);
 
         // Extract and clamp movement parameters
-        let speed_factor = outputs[0].clamp(0.0, 1.0);
+        // Allow backwards movement: -1.0 = full reverse, 1.0 = full forward
+        let speed_factor = outputs[0].clamp(-1.0, 1.0);
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
 
         let threshold = THRESHOLD_PRED;
         // threshold for moving, and if low on energy, stop moving, gain energy
-        if speed_factor < threshold {
+        // Use abs() since negative speed (backwards) should also count as movement
+        if speed_factor.abs() < threshold {
             return; // Dont move under treshhold
         }
 
@@ -762,12 +779,14 @@ impl Prey {
         assert!(outputs.len() == 2);
         assert!(energy_ratio >= 0.0 && energy_ratio <= 1.0);
 
-        let speed_factor = outputs[0].clamp(0.0, 1.0);
+        // Allow backwards movement: -1.0 = full reverse, 1.0 = full forward
+        let speed_factor = outputs[0].clamp(-1.0, 1.0);
 
         // *THIS CAN BE ADAPTED*
         let threshold = THRESHOLD_PREY;
         // threshold for moving, and if low on energy, stop moving, gain energy
-        if speed_factor < threshold || self.core.energy < 0.02 * PREY_ENERGY {
+        // Use abs() since negative speed (backwards) should also count as movement
+        if speed_factor.abs() < threshold || self.core.energy < 0.02 * PREY_ENERGY {
             // moving threshold, rests and gains energy
             self.core.energy = (self.core.energy + PREY_REST_ENERGY_GAIN).min(PREY_ENERGY);
             return; // Don't move while resting

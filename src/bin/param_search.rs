@@ -2,9 +2,11 @@ use colored::*;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashSet;
+use std::fs;
 use std::process::Command;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct Params {
     #[serde(rename = "ADD_NEURON")]
     add_neuron: Option<f32>,
@@ -24,6 +26,8 @@ struct Params {
     pred_init_numb: Option<usize>,
     #[serde(rename = "PREY_INIT_NUMB")]
     prey_init_numb: Option<usize>,
+    #[serde(rename = "SEED")]
+    seed: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,38 +46,37 @@ fn generate_grid_params() -> Vec<Params> {
 
     // Ranges
     // add_neuron: 0.07..0.15 (step 0.01) -> 7, 8, ... 15 / 100.0
-    let add_neurons: Vec<f32> = (7..=15).map(|x| x as f32 / 100.0).collect();
+    let add_neurons: Vec<f32> = (5..=15).map(|x| x as f32 / 100.0).collect();
 
     // add_weight: 0.5..0.7 (step 0.1) -> 0.5, 0.6, 0.7
     let add_weights: Vec<f32> = vec![0.5, 0.6, 0.7];
 
     // change_weight: 0.6..0.9 (step 0.1) -> 0.6, 0.7, 0.8, 0.9
-    let change_weights: Vec<f32> = vec![0.6, 0.7, 0.8, 0.9];
+    let change_weights: Vec<f32> = vec![0.68, 0.7, 0.8];
 
     // mutation: 20, 30, 40 (for both pred and prey init mut)
-    let mutations: Vec<usize> = vec![20, 30, 40];
+    let mutations: Vec<usize> = vec![10, 5, 15];
 
-    // Population configs: (PredInit, PreyInit, MaxPred, MaxPrey)
-    // 1. 40, 160, 125, 500
-    // 2. 100, 400, 600, 2400
-    let pop_configs = vec![(40, 160, 125, 500), (100, 400, 600, 2400)];
+    // Three different seeds for testing
+    let seeds: Vec<u64> = vec![420, 12345, 61212];
 
     for &an in &add_neurons {
         for &aw in &add_weights {
             for &cw in &change_weights {
                 for &mut_rate in &mutations {
-                    for &(pred_init, prey_init, max_pred, max_prey) in &pop_configs {
-                        params_list.push(Params {
-                            add_neuron: Some(an),
-                            add_weight: Some(aw),
-                            change_weight: Some(cw),
-                            pred_init_mut: Some(mut_rate),
-                            prey_init_mut: Some(mut_rate),
-                            max_pred_count: Some(max_pred),
-                            max_prey_count: Some(max_prey),
-                            pred_init_numb: Some(pred_init),
-                            prey_init_numb: Some(prey_init),
-                        });
+                        for &seed in &seeds {
+                            params_list.push(Params {
+                                add_neuron: Some(an),
+                                add_weight: Some(aw),
+                                change_weight: Some(cw),
+                                pred_init_mut: Some(mut_rate),
+                                prey_init_mut: Some(mut_rate),
+                                max_pred_count: Some(175),
+                                max_prey_count: Some(800),
+                                pred_init_numb: Some(110),
+                                prey_init_numb: Some(450),
+                                seed: Some(seed),
+                            });
                     }
                 }
             }
@@ -91,7 +94,7 @@ fn run_trial(params: &Params) -> Option<SimResult> {
         .arg("--params")
         .arg(&params_json)
         .arg("--max_steps")
-        .arg("20000")
+        .arg("40000")
         .output();
 
     // Fallback to cargo run if binary not found
@@ -107,26 +110,69 @@ fn run_trial(params: &Params) -> Option<SimResult> {
             .arg("--params")
             .arg(&params_json)
             .arg("--max_steps")
-            .arg("20000")
+            .arg("40000")
             .output()
             .ok()?,
     };
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Command failed with stderr: {}", stderr);
         return None;
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    serde_json::from_str(&stdout).ok()
+    match serde_json::from_str(&stdout) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            eprintln!("Failed to parse JSON from stdout: {}", e);
+            eprintln!("Stdout was: {}", stdout);
+            None
+        }
+    }
 }
 
 fn main() {
     let params_list = generate_grid_params();
     let total_trials = params_list.len();
+    
+    // Load previous results to identify failed configurations
+    let results_file = "param_search_results.json";
+    let mut failed_params: HashSet<String> = HashSet::new();
+    let mut previous_results: Vec<SimResult> = Vec::new();
+    
+    if let Ok(content) = fs::read_to_string(results_file) {
+        if let Ok(results) = serde_json::from_str::<Vec<SimResult>>(&content) {
+            println!("Loaded {} previous results", results.len());
+            for result in &results {
+                if !result.survived {
+                    // Use the JSON string as a key
+                    failed_params.insert(result.parameters.to_string());
+                }
+            }
+            previous_results = results;
+            println!("Skipping {} previously failed configurations", failed_params.len());
+        }
+    }
+    
+    // Filter out previously failed configurations
+    let params_to_test: Vec<&Params> = params_list
+        .iter()
+        .filter(|p| {
+            let param_json = serde_json::to_value(p).ok()
+                .and_then(|v| Some(v.to_string()))
+                .unwrap_or_default();
+            !failed_params.contains(&param_json)
+        })
+        .collect();
+    
+    let tests_to_run = params_to_test.len();
     println!(
         "Running {} parameter search trials (Deterministic Grid)...",
-        total_trials
+        tests_to_run
     );
+    println!("Total configurations: {}", total_trials);
+    println!("Skipped (already failed): {}", total_trials - tests_to_run);
 
     // Ensure we have a build first
     let _ = Command::new("cargo")
@@ -136,9 +182,9 @@ fn main() {
         .arg("headless_runner")
         .status();
 
-    let results: Vec<SimResult> = params_list
+    let mut results: Vec<SimResult> = params_to_test
         .par_iter()
-        .map(|params| {
+        .map(|&params| {
             if let Some(res) = run_trial(params) {
                 let status = if res.survived {
                     "SURVIVED".green()
@@ -147,13 +193,18 @@ fn main() {
                 };
 
                 println!(
-                    "[{}] Steps: {:<5} | AddN:{:.2} AddW:{:.1} ChngW:{:.1} Mut:{}",
+                    "[{}] Steps: {:<5} | Preds:{}/{} Preys:{}/{} | AddN:{:.2} AddW:{:.1} ChngW:{:.1} Mut:{} Seed:{}",
                     status,
                     res.steps,
+                    res.final_predators,
+                    params.max_pred_count.unwrap_or(0),
+                    res.final_preys,
+                    params.max_prey_count.unwrap_or(0),
                     params.add_neuron.unwrap_or(0.0),
                     params.add_weight.unwrap_or(0.0),
                     params.change_weight.unwrap_or(0.0),
-                    params.pred_init_mut.unwrap_or(0)
+                    params.pred_init_mut.unwrap_or(0),
+                    params.seed.unwrap_or(0)
                 );
                 res
             } else {
@@ -170,6 +221,15 @@ fn main() {
             }
         })
         .collect();
+
+    // Merge with previous results
+    results.extend(previous_results);
+    
+    // Save all results to file
+    if let Ok(json) = serde_json::to_string_pretty(&results) {
+        let _ = fs::write(results_file, json);
+        println!("Results saved to {}", results_file);
+    }
 
     println!("\n\nSearch complete. Analyzing results...");
 
