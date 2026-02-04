@@ -83,7 +83,7 @@ pub fn draw_wrapped_line(
 }
 
 /// Draws the statistics panel on the right side of the game field
-pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize) {
+pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize, longest_pred_lifespan: i32, longest_prey_lifespan: i32) {
     let panel_x = settings::SCREEN_WIDTH as f32;
     draw_rectangle(
         panel_x,
@@ -108,9 +108,15 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize)
     let text_prey = format!("Preys: {}", prey_count);
     let frame_text = format!("Frame: {}", frame_count);
 
+    let longest_pred_text = format!("'oldest' predator: {}", longest_pred_lifespan);
+    let longest_prey_text = format!("'oldest' prey: {}", longest_prey_lifespan);
+
     draw_text(&text_pred, text_x, 70.0, 20.0, settings::PRED_COLOR);
     draw_text(&text_prey, text_x, 95.0, 20.0, settings::PREY_COLOR);
     draw_text(&frame_text, text_x, 130.0, 20.0, WHITE);
+
+    draw_text(&longest_pred_text, text_x, 230.0, 20.0, settings::PRED_COLOR);
+    draw_text(&longest_prey_text, text_x, 260.0, 20.0, settings::PREY_COLOR);
 }
 
 pub fn draw_population_graph_fullscreen(
