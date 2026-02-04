@@ -135,10 +135,10 @@ fn run_simulation(params_raw: &serde_json::Value, max_steps: i64) -> SimResult {
     // Create game using your encapsulated logic
     let mut game = Game::new(
         None, // DataManager is not used in headless mode
-        params.max_pred_count.unwrap(),
-        params.max_prey_count.unwrap(),
         params.pred_init_numb.unwrap(),
         params.prey_init_numb.unwrap(),
+        params.max_pred_count.unwrap(),
+        params.max_prey_count.unwrap(),
         settings::SEED,
     );
 
