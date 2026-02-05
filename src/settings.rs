@@ -26,18 +26,18 @@ use std::sync::RwLock;
 // - new_conn_proba: 0.7 (70% chance to add connection)
 // - offset_weight_proba: 0.5 (50% chance to mutate weight)
 // - offset_bias_proba: 0.2 (20% chance to mutate bias)
-static ADD_NEURON: RwLock<f32> = RwLock::new(0.13);
+static ADD_NEURON: RwLock<f32> = RwLock::new(0.07);
 static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.5);
-static CHANGE_WEIGHT: RwLock<f32> = RwLock::new(0.8);
+static CHANGE_WEIGHT: RwLock<f32> = RwLock::new(0.68);
 static BIAS: RwLock<f32> = RwLock::new(0.5);
 
 // This is the step size applied when a weight is changed
 pub const MUT_CHANGE_STEP: f32 = 0.05;
 // Initial mutations: YouTube uses 10, giving networks more initial structure
-static PREY_INIT_MUT: RwLock<usize> = RwLock::new(10);
-static PRED_INIT_MUT: RwLock<usize> = RwLock::new(10);
+static PREY_INIT_MUT: RwLock<usize> = RwLock::new(15);
+static PRED_INIT_MUT: RwLock<usize> = RwLock::new(15);
 
-pub const SEED: u64 = 61212;
+pub const SEED: u64 = 420;
 
 pub const PRED_INIT_NUMB: usize = 110;
 pub const PREY_INIT_NUMB: usize = 450;
