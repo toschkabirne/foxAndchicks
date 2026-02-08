@@ -38,7 +38,7 @@ pub fn re_ac(x: f32) -> f32 {
 ///
 /// Design rationale: tanh squashes to (-1, 1) range
 pub fn act_func(x: f32) -> f32 {
-    let a = 1.7;
+    let a = 1.5;
     act_tanh(a * x)
 }
 

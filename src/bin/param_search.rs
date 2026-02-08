@@ -53,15 +53,15 @@ fn generate_grid_params() -> Vec<Params> {
     let change_weights: Vec<f32> = vec![0.6, 0.7, 0.8, 0.9];
 
     // mutation: 20, 30, 40 (for both pred and prey init mut)
-    let mutations: Vec<usize> = vec![20];
+    let mutations: Vec<usize> = vec![15];
 
     // Population configs: (PredInit, PreyInit, MaxPred, MaxPrey)
     // 1. 40, 160, 125, 500
     // 2. 100, 400, 600, 2400
     let pop_configs = vec![
-        (40, 160, 125, 500),
+        (50, 200, 125, 600),
         (100, 400, 150, 700),
-        (150, 600, 225, 1050),
+        (100, 400, 200, 1000),
     ];
 
     for &an in &add_neurons {
@@ -97,7 +97,7 @@ fn run_trial(params: &Params) -> Option<SimResult> {
         .arg("--params")
         .arg(&params_json)
         .arg("--max_steps")
-        .arg("30000")
+        .arg("40000")
         .output();
 
     // Fallback to cargo run if binary not found
@@ -113,7 +113,7 @@ fn run_trial(params: &Params) -> Option<SimResult> {
             .arg("--params")
             .arg(&params_json)
             .arg("--max_steps")
-            .arg("30000")
+            .arg("40000")
             .output()
             .ok()?,
     };

@@ -21,8 +21,8 @@ use std::sync::RwLock;
 // ----------------------------------------
 
 // Mutation / Bias params, only change the numbers, not the variables
-static ADD_NEURON: RwLock<f32> = RwLock::new(0.14);
-static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.5);
+static ADD_NEURON: RwLock<f32> = RwLock::new(0.11);
+static ADD_WEIGHT: RwLock<f32> = RwLock::new(0.6);
 static CHANGE_WEIGHT: RwLock<f32> = RwLock::new(0.80);
 static BIAS: RwLock<f32> = RwLock::new(0.5);
 
@@ -31,13 +31,13 @@ pub const MUT_CHANGE_STEP: f32 = 0.05;
 static PREY_INIT_MUT: RwLock<usize> = RwLock::new(20);
 static PRED_INIT_MUT: RwLock<usize> = RwLock::new(20);
 
-pub const SEED: u64 = 61;
+pub const SEED: u64 = 420;
 
 pub const PRED_INIT_NUMB: usize = 100;
 pub const PREY_INIT_NUMB: usize = 400;
 
-pub const MAX_PRED_COUNT: usize = 150;
-pub const MAX_PREY_COUNT: usize = 700;
+pub const MAX_PRED_COUNT: usize = 200;
+pub const MAX_PREY_COUNT: usize = 1000;
 
 pub const PRED_SIGHT_RANGE: f32 = 150.0;
 pub const PREY_SIGHT_RANGE: f32 = 100.0;

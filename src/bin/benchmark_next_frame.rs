@@ -11,6 +11,7 @@ use predator_vs_prey::game_heat_allo::Game as HeapGame;
 use predator_vs_prey::settings;
 use std::env;
 use std::fs::File;
+use std::hint::black_box;
 use std::io::Write;
 use std::time::{Duration, Instant};
 
@@ -45,14 +46,13 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let output_file =
         parse_arg_str(&args, "--output").unwrap_or_else(|| "benchmark_results".to_string());
-    let iterations: usize = parse_arg(&args, "--iterations").unwrap_or(30);
+    let iterations: usize = parse_arg(&args, "--iterations").unwrap_or(15);
     let warmup: usize = parse_arg(&args, "--warmup").unwrap_or(300);
 
-    let frames_per_iter: usize = parse_arg(&args, "--frames").unwrap_or(1000);
+    let frames_per_iter: usize = parse_arg(&args, "--frames").unwrap_or(1500);
 
     // Population configurations to test (predators, prey = 5x predators)
-    let configs: Vec<(usize, usize)> =
-        vec![(10, 50), (30, 150), (50, 250), (150, 700), (500, 2500)];
+    let configs: Vec<(usize, usize)> = vec![(50, 250), (100, 500), (200, 1000), (400, 2000)];
 
     println!("╔══════════════════════════════════════════════════════════════════╗");
     println!("║     Performance Benchmark: Heap Allocation vs Scratch Vector     ║");
@@ -167,37 +167,28 @@ fn run_benchmark(config: &BenchConfig, warmup: usize) -> BenchStats {
 fn benchmark_scratch(config: &BenchConfig, warmup: usize) -> Vec<Duration> {
     let mut times = Vec::with_capacity(config.iterations);
 
-    // Warmup
-    for _ in 0..warmup {
-        let mut game = ScratchGame::new(
-            None,
-            config.num_preds,
-            config.num_preys,
-            config.num_preds * 10,
-            config.num_preys * 10,
-            settings::SEED,
-        );
-        for _ in 0..10 {
-            let _ = game.next_frame();
-        }
-    }
-
     // Measure
     for _ in 0..config.iterations {
         let mut game = ScratchGame::new(
             None,
             config.num_preds,
             config.num_preys,
-            config.num_preds * 10,
-            config.num_preys * 10,
+            config.num_preds * 5, // max_pred_count
+            config.num_preys * 5, // max_prey_count
             settings::SEED,
         );
+        for _ in 0..warmup {
+            black_box(game.next_frame());
+        }
 
         let start = Instant::now();
         for _ in 0..config.frames_per_iter {
-            let _ = game.next_frame();
+            black_box(game.next_frame());
         }
         times.push(start.elapsed());
+        if game.predator_count() < 2 || game.prey_count() < 2 {
+            panic!("Predators, or prey might have died, invalid test");
+        }
     }
 
     times
@@ -206,37 +197,28 @@ fn benchmark_scratch(config: &BenchConfig, warmup: usize) -> Vec<Duration> {
 fn benchmark_heap(config: &BenchConfig, warmup: usize) -> Vec<Duration> {
     let mut times = Vec::with_capacity(config.iterations);
 
-    // Warmup
-    for _ in 0..warmup {
-        let mut game = HeapGame::new(
-            None,
-            config.num_preds,
-            config.num_preys,
-            config.num_preds * 10,
-            config.num_preys * 10,
-            settings::SEED,
-        );
-        for _ in 0..10 {
-            let _ = game.next_frame();
-        }
-    }
-
     // Measure
     for _ in 0..config.iterations {
         let mut game = HeapGame::new(
             None,
             config.num_preds,
             config.num_preys,
-            config.num_preds * 10,
-            config.num_preys * 10,
+            config.num_preds * 5,
+            config.num_preys * 5,
             settings::SEED,
         );
 
+        for _ in 0..warmup {
+            black_box(game.next_frame());
+        }
         let start = Instant::now();
         for _ in 0..config.frames_per_iter {
-            let _ = game.next_frame();
+            black_box(game.next_frame());
         }
         times.push(start.elapsed());
+        if game.predator_count() < 10 || game.prey_count() < 10 {
+            panic!("Predators, or prey might have died, invalid test");
+        }
     }
 
     times
@@ -247,22 +229,22 @@ fn verify_determinism(num_preds: usize, num_preys: usize, frames: usize) {
         None,
         num_preds,
         num_preys,
-        num_preds * 10,
-        num_preys * 10,
+        num_preds * 5,
+        num_preys * 5,
         settings::SEED,
     );
     let mut heap_game = HeapGame::new(
         None,
         num_preds,
         num_preys,
-        num_preds * 10,
-        num_preys * 10,
+        num_preds * 5,
+        num_preys * 5,
         settings::SEED,
     );
 
     for _ in 0..frames {
-        let _ = scratch_game.next_frame();
-        let _ = heap_game.next_frame();
+        black_box(scratch_game.next_frame());
+        black_box(heap_game.next_frame());
     }
 
     let scratch_preds = scratch_game.predator_count();
