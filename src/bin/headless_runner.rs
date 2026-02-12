@@ -140,6 +140,8 @@ fn run_simulation(params_raw: &serde_json::Value, max_steps: i64) -> SimResult {
         None, // DataManager is not used in headless mode
         params.pred_init_numb.unwrap(),
         params.prey_init_numb.unwrap(),
+        params.pred_init_numb.unwrap(),
+        params.prey_init_numb.unwrap(),
         params.max_pred_count.unwrap(),
         params.max_prey_count.unwrap(),
         seed,

@@ -25,6 +25,8 @@ pub struct Game {
     pub data_manager: Option<DataManager>,
     scratch_idxs: Vec<usize>,
     rng: StdRng,
+    pub longest_pred_lifespan: i32,
+    pub longest_prey_lifespan: i32,
 }
 
 impl Game {
@@ -34,6 +36,23 @@ impl Game {
     pub fn prey_count(&self) -> usize {
         self.preys.len()
     }
+
+    pub fn longest_pred_lifespan(&self) -> i32 {
+        self.predators
+            .iter()
+            .map(|p| p.core.survived_iters)
+            .max()
+            .unwrap_or(0)
+    }
+
+    pub fn longest_prey_lifespan(&self) -> i32 {
+        self.preys
+            .iter()
+            .map(|p| p.core.survived_iters)
+            .max()
+            .unwrap_or(0)
+    }
+
     /// Returns the actual filename (with timestamp) used for storing data, if any
     pub fn get_data_filename(&self) -> Option<&str> {
         self.data_manager.as_ref().map(|dm| dm.filename.as_str())
@@ -148,6 +167,8 @@ impl Game {
             data_manager,
             scratch_idxs: Vec::new(),
             rng,
+            longest_pred_lifespan: 0,
+            longest_prey_lifespan: 0,
         }
     }
 
@@ -165,6 +186,8 @@ impl Game {
 
     pub fn next_frame(&mut self) -> Frame {
         self.frame_count += 1;
+        self.longest_pred_lifespan = self.longest_pred_lifespan();
+        self.longest_prey_lifespan = self.longest_prey_lifespan();
 
         // ----------------------------
         // PREDATOR PHASE
@@ -518,7 +541,7 @@ impl Game {
                     draw_frame(frame, draw_sight_lines, None);
 
                     let (pred_count, prey_count) = frame.counts();
-                    draw_game_stats(pred_count, prey_count, frame.tick);
+                    draw_game_stats(pred_count, prey_count, frame.tick, 0, 0);
 
                     if graph_enabled() {
                         draw_text(
@@ -540,7 +563,7 @@ impl Game {
                     );
 
                     let (pred_count, prey_count) = frame.counts();
-                    draw_game_stats(pred_count, prey_count, frame.tick);
+                    draw_game_stats(pred_count, prey_count, frame.tick, 0, 0);
                 }
             }
 

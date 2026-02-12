@@ -22,7 +22,9 @@ pub struct Game {
     max_predators: usize,
     max_preys: usize,
     pub data_manager: Option<DataManager>,
-    scratch_idxs: Vec<usize>,
+    rng: StdRng,
+    longest_pred_lifespan: i32,
+    longest_prey_lifespan: i32,
 }
 
 impl Game {
@@ -31,6 +33,22 @@ impl Game {
     }
     pub fn prey_count(&self) -> usize {
         self.preys.len()
+    }
+
+    pub fn longest_pred_lifespan(&self) -> i32 {
+        self.predators
+            .iter()
+            .map(|p| p.core.survived_iters)
+            .max()
+            .unwrap_or(0)
+    }
+
+    pub fn longest_prey_lifespan(&self) -> i32 {
+        self.preys
+            .iter()
+            .map(|p| p.core.survived_iters)
+            .max()
+            .unwrap_or(0)
     }
     /// Returns the actual filename (with timestamp) used for storing data, if any
     pub fn get_data_filename(&self) -> Option<&str> {
@@ -94,7 +112,9 @@ impl Game {
             max_predators: max_preds,
             max_preys: max_preys,
             data_manager,
-            scratch_idxs: Vec::new(),
+            rng,
+            longest_pred_lifespan: 0,
+            longest_prey_lifespan: 0,
         }
     }
 
@@ -112,7 +132,8 @@ impl Game {
 
     pub fn next_frame(&mut self) -> Frame {
         self.frame_count += 1;
-
+        self.longest_pred_lifespan = self.longest_pred_lifespan();
+        self.longest_prey_lifespan = self.longest_prey_lifespan();
         // ----------------------------
         // PREDATOR PHASE
         // ----------------------------
@@ -142,7 +163,6 @@ impl Game {
         // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
         let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
         let mut newborn_preds: Vec<Predator> = Vec::new();
-        let mut rng = StdRng::seed_from_u64(settings::SEED);
 
         for pred in self.predators.iter_mut() {
             // Hunt near new position (preys haven't moved yet)
@@ -154,12 +174,12 @@ impl Game {
                 nearby_prey_idxs.iter().filter_map(|&i| self.preys.get(i)),
                 &mut eaten_prey_ids,
                 &mut newborn_preds,
-                &mut rng,
+                &mut self.rng,
             );
         }
 
         // Remove dead predators and add newborns
-        self.predators.retain(|pred| pred.core.energy >= 0.0);
+        self.predators.retain(|pred| pred.core.energy > 0.0);
 
         let free_slots = self.max_predators.saturating_sub(self.predators.len());
         if free_slots > 0 {
@@ -202,7 +222,7 @@ impl Game {
 
         for prey in self.preys.iter_mut() {
             let has_slot = newborn_preys.len() < allowed_newborns;
-            if let Some(child) = prey.reproduce(&mut rng, has_slot) {
+            if let Some(child) = prey.reproduce(&mut self.rng, has_slot) {
                 newborn_preys.push(child);
             }
         }
@@ -292,7 +312,7 @@ impl Game {
             draw_frame(frame, draw_sight_lines, None);
 
             let (pred_count, prey_count) = frame.counts();
-            draw_game_stats(pred_count, prey_count, frame.tick);
+            draw_game_stats(pred_count, prey_count, frame.tick, 0, 0);
 
             draw_playback_controls(&mut playback_state, total_frames);
 

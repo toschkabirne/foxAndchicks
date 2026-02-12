@@ -1,61 +1,106 @@
-use predator_vs_prey::game::Game;
-use predator_vs_prey::settings;
+use predator_vs_prey::{game::Game, settings};
+use std::hint::black_box;
 use std::time::Instant;
 
-fn main() {
-    let num_preds = 200; // Increase load for profiling
-    let num_preys = 400;
+const NUM_PREDS: usize = 200;
+const NUM_PREYS: usize = 400;
 
-    // Create a game with deterministic settings if possible, or just default.
-    // We'll use the constructor that allows specifying counts.
-    let mut game = Game::new(
+const WARMUP_FRAMES: usize = 200;
+const MEASURE_FRAMES: usize = 2000;
+const RUNS: usize = 7;
+
+// Wenn true: nach JEDEM Run coarse_prof Breakdown drucken (viel Output).
+// Wenn false: nur für einen "repräsentativen" Run (z.B. Run 1).
+const PRINT_BREAKDOWN_EACH_RUN: bool = true;
+
+fn build_game() -> Game {
+    Game::new(
         None,
-        num_preds,
-        num_preys,
+        NUM_PREDS,
+        NUM_PREYS,
         settings::MAX_PRED_COUNT,
         settings::MAX_PREY_COUNT,
         settings::SEED,
-    );
+    )
+}
 
-    println!("Starting profiling run...");
+fn step(game: &mut Game, frames: usize) {
+    for _ in 0..frames {
+        let frame = game.next_frame_sequential(); // nutzt deine coarse_prof::profile! scopes
+        black_box(frame);
+    }
+}
+
+fn mean_std(values: &[f64]) -> (f64, f64) {
+    let n = values.len() as f64;
+    let mean = values.iter().sum::<f64>() / n;
+    let var = values.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / n;
+    (mean, var.sqrt())
+}
+
+fn main() {
+    let mut secs: Vec<f64> = Vec::with_capacity(RUNS);
+    let mut fps: Vec<f64> = Vec::with_capacity(RUNS);
+
     println!(
-        "Initial State: {} Predators, {} Preys",
-        game.predator_count(),
-        game.prey_count()
+        "Profiling: {} preds, {} preys | warmup {} | measure {} | runs {}",
+        NUM_PREDS, NUM_PREYS, WARMUP_FRAMES, MEASURE_FRAMES, RUNS
     );
 
-    let total_frames = 2000;
-    let start_time = Instant::now();
+    for run in 0..RUNS {
+        let mut game = build_game();
 
-    for i in 0..total_frames {
-        game.next_frame_sequential();
+        // Warmup (Caches/CPU hochfahren, JIT gibt’s nicht, aber Branch predictor & caches existieren)
+        step(&mut game, WARMUP_FRAMES);
 
-        if i % 100 == 0 {
-            println!(
-                "Frame {}: {} preds, {} preys",
-                i,
-                game.predator_count(),
-                game.prey_count()
-            );
+        // WICHTIG: Warmup aus dem Profiling rauswerfen
+        coarse_prof::reset(); // Reset profiling information :contentReference[oaicite:1]{index=1}
+
+        let start = Instant::now();
+        step(&mut game, MEASURE_FRAMES);
+        let dt = start.elapsed().as_secs_f64();
+
+        let frames_per_sec = MEASURE_FRAMES as f64 / dt;
+        secs.push(dt);
+        fps.push(frames_per_sec);
+
+        println!(
+            "\n--------------------------------------------------\n\
+             Run {} Complete\n\
+             Total Time: {:.4}s\n\
+             Total Frames: {}\n\
+             Average FPS: {:.2}\n\
+             Final State: {} Predators, {} Preys\n\
+             --------------------------------------------------",
+            run + 1,
+            dt,
+            MEASURE_FRAMES,
+            frames_per_sec,
+            game.predator_count(),
+            game.prey_count()
+        );
+
+        if PRINT_BREAKDOWN_EACH_RUN || run == 0 {
+            println!("\nProfiling Breakdown (measured window only):");
+            coarse_prof::write(&mut std::io::stdout()).unwrap(); // coarse-prof hierarchical timing :contentReference[oaicite:2]{index=2}
         }
+
+        // Damit der nächste Run nicht auf altem Profiling-Müll aufbaut
+        coarse_prof::reset();
     }
 
-    let duration = start_time.elapsed();
-    let total_secs = duration.as_secs_f64();
-    let fps = total_frames as f64 / total_secs;
+    let (mean_s, std_s) = mean_std(&secs);
+    let (mean_f, std_f) = mean_std(&fps);
 
-    println!("--------------------------------------------------");
-    println!("Profiling Complete");
-    println!("Total Time: {:.4}s", total_secs);
-    println!("Total Frames: {}", total_frames);
-    println!("Average FPS: {:.2}", fps);
+    let min_f = fps.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max_f = fps.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+
     println!(
-        "Final State: {} Predators, {} Preys",
-        game.predator_count(),
-        game.prey_count()
+        "\n==================== Summary ====================\n\
+         Runs: {}\n\
+         Time:   mean {:.4}s  (std {:.4}s)\n\
+         Speed:  mean {:.2} FPS (std {:.2}) | min {:.2}, max {:.2}\n\
+         =================================================\n",
+        RUNS, mean_s, std_s, mean_f, std_f, min_f, max_f
     );
-    println!("--------------------------------------------------");
-
-    println!("\nProfiling Breakdown:");
-    coarse_prof::write(&mut std::io::stdout()).unwrap();
 }

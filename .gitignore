@@ -18,6 +18,8 @@ benchmark_results.csv
 nn_signal_analysis.md
 nn_signal_analysis.csv
 /.venv
-*.tex
-parmparm_search.out
+
+parm_search.out
 grid_search_results.txt
+/youtube_files
+/project_report

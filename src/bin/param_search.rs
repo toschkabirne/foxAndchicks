@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
@@ -73,19 +75,19 @@ fn generate_grid_params() -> Vec<Params> {
         for &aw in &add_weights {
             for &cw in &change_weights {
                 for &mut_rate in &mutations {
-                        for &seed in &seeds {
-                            params_list.push(Params {
-                                add_neuron: Some(an),
-                                add_weight: Some(aw),
-                                change_weight: Some(cw),
-                                pred_init_mut: Some(mut_rate),
-                                prey_init_mut: Some(mut_rate),
-                                max_pred_count: Some(175),
-                                max_prey_count: Some(800),
-                                pred_init_numb: Some(110),
-                                prey_init_numb: Some(450),
-                                seed: Some(seed),
-                            });
+                    for &seed in &seeds {
+                        params_list.push(Params {
+                            add_neuron: Some(an),
+                            add_weight: Some(aw),
+                            change_weight: Some(cw),
+                            pred_init_mut: Some(mut_rate),
+                            prey_init_mut: Some(mut_rate),
+                            max_pred_count: Some(175),
+                            max_prey_count: Some(800),
+                            pred_init_numb: Some(110),
+                            prey_init_numb: Some(450),
+                            seed: Some(seed),
+                        });
                     }
                 }
             }
@@ -144,12 +146,12 @@ fn run_trial(params: &Params) -> Option<SimResult> {
 fn main() {
     let params_list = generate_grid_params();
     let total_trials = params_list.len();
-    
+
     // Load previous results to identify failed configurations
     let results_file = "param_search_results.json";
     let mut failed_params: HashSet<String> = HashSet::new();
     let mut previous_results: Vec<SimResult> = Vec::new();
-    
+
     if let Ok(content) = fs::read_to_string(results_file) {
         if let Ok(results) = serde_json::from_str::<Vec<SimResult>>(&content) {
             println!("Loaded {} previous results", results.len());
@@ -160,21 +162,25 @@ fn main() {
                 }
             }
             previous_results = results;
-            println!("Skipping {} previously failed configurations", failed_params.len());
+            println!(
+                "Skipping {} previously failed configurations",
+                failed_params.len()
+            );
         }
     }
-    
+
     // Filter out previously failed configurations
     let params_to_test: Vec<&Params> = params_list
         .iter()
         .filter(|p| {
-            let param_json = serde_json::to_value(p).ok()
+            let param_json = serde_json::to_value(p)
+                .ok()
                 .and_then(|v| Some(v.to_string()))
                 .unwrap_or_default();
             !failed_params.contains(&param_json)
         })
         .collect();
-    
+
     let tests_to_run = params_to_test.len();
     println!(
         "Running {} parameter search trials (Deterministic Grid)...",
@@ -235,7 +241,7 @@ fn main() {
     });
 
     let results = results_shared.lock().unwrap().clone();
-    
+
     // Save all results to file
     write_results(results_file, &results);
     println!("Results saved to {}", results_file);
@@ -245,6 +251,19 @@ fn main() {
     // Filter for survived
     let survived: Vec<&SimResult> = results.iter().filter(|r| r.survived).collect();
     println!("Survived: {}/{}", survived.len(), total_trials);
+
+    let output_file_name = "parm_search.out";
+    let mut file = File::create(output_file_name).expect("Failed to create output file");
+
+    if survived.is_empty() {
+        writeln!(file, "No runs survived.").unwrap();
+    } else {
+        writeln!(file, "Successful Runs ({}):", survived.len()).unwrap();
+        for res in &survived {
+            writeln!(file, "{}", serde_json::to_string(res).unwrap()).unwrap();
+        }
+    }
+    println!("Results saved to {}", output_file_name);
 
     if let Some(best) = survived.iter().max_by_key(|r| r.steps) {
         println!("\nBest Result (Longest Survival):");

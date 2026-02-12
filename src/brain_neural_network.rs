@@ -24,7 +24,7 @@ const FULLY_CONNECTED: bool = false;
 /// Design rationale: Sigmoid squashes values to (0, 1) range. The parameters
 /// (a = 1.5, b = 0.0) control steepness and offset.
 pub fn sigmoid(x: f32) -> f32 {
-    let a = 4.0; // steepness of curve
+    let a = 3.5; // steepness of curve
     let b = 3.0; // offset of curve
     1.0 / (1.0 + (-x * a + b).exp())
 }

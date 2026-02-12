@@ -111,6 +111,7 @@ pub struct AnimalCore {
     pub energy: f32,
     /// Neural network brain that controls decision-making, each animal owns its brain
     pub brain: NeuralNetwork,
+    pub survived_iters: i32,
 }
 
 pub trait HasCore {
@@ -138,6 +139,7 @@ impl AnimalCore {
             angle,
             energy,
             brain,
+            survived_iters: 0,
         }
     }
 
@@ -531,11 +533,9 @@ impl Predator {
         // Allow backwards movement: -1.0 = full reverse, 1.0 = full forward
         let speed_factor = outputs[0].clamp(-1.0, 1.0);
         let turn_delta = outputs[1].clamp(-1.0, 1.0) * MAX_TURN_ANGLE;
-
-        let threshold = THRESHOLD_PRED;
         // threshold for moving, and if low on energy, stop moving, gain energy
-        // Use abs() since negative speed (backwards) should also count as movement
-        if speed_factor.abs() < threshold {
+        if speed_factor < THRESHOLD_PRED {
+            self.core.survived_iters += 1;
             return; // Dont move under treshhold
         }
 
@@ -547,6 +547,7 @@ impl Predator {
             PRED_SPEED,
             PRED_MOVING_DECAY,
         );
+        self.core.survived_iters += 1;
     }
 
     /// Checks for nearby prey and attempts to eat them
@@ -779,15 +780,12 @@ impl Prey {
         assert!(outputs.len() == 2);
         assert!(energy_ratio >= 0.0 && energy_ratio <= 1.0);
 
-        // Allow backwards movement: -1.0 = full reverse, 1.0 = full forward
-        let speed_factor = outputs[0].clamp(-1.0, 1.0);
-
+        let speed_factor = outputs[0].clamp(0.0, 1.0);
         // *THIS CAN BE ADAPTED*
-        let threshold = THRESHOLD_PREY;
         // threshold for moving, and if low on energy, stop moving, gain energy
-        // Use abs() since negative speed (backwards) should also count as movement
-        if speed_factor.abs() < threshold || self.core.energy < 0.02 * PREY_ENERGY {
+        if speed_factor < THRESHOLD_PREY || self.core.energy < 0.02 * PREY_ENERGY {
             // moving threshold, rests and gains energy
+            self.core.survived_iters += 1;
             self.core.energy = (self.core.energy + PREY_REST_ENERGY_GAIN).min(PREY_ENERGY);
             return; // Don't move while resting
         }
@@ -805,6 +803,7 @@ impl Prey {
             PREY_SPEED,
             PREY_MOVING_DECAY,
         );
+        self.core.survived_iters += 1;
     }
 
     /// Attempts to reproduce, creating an offspring if conditions are met.

@@ -37,7 +37,7 @@ pub const MUT_CHANGE_STEP: f32 = 0.05;
 static PREY_INIT_MUT: RwLock<usize> = RwLock::new(15);
 static PRED_INIT_MUT: RwLock<usize> = RwLock::new(15);
 
-pub const SEED: u64 = 420;
+pub const SEED: u64 = 61;
 
 pub const PRED_INIT_NUMB: usize = 110;
 pub const PREY_INIT_NUMB: usize = 450;
