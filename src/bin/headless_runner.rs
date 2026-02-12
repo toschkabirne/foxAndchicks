@@ -46,17 +46,12 @@ struct SimResult {
 }
 
 fn main() {
-    // Python argparse equivalent:
-    // --params JSON_STRING (required)
-    // --max_steps int (default 5000)
+    // Parse arguments: --params JSON_STRING (required), --max_steps int (default 5000)
     let params_str = match parse_arg("--params") {
         Some(s) => s,
         None => {
-            // match python behavior: print {"error": "..."}
-            println!(
-                "{}",
-                json!({ "error": "Missing required --params" }).to_string()
-            );
+            // Print JSON error on missing params
+            println!("{}", json!({ "error": "Missing required --params" }));
             return;
         }
     };
@@ -70,7 +65,7 @@ fn main() {
         Err(e) => {
             println!(
                 "{}",
-                json!({ "error": format!("Invalid params JSON: {e}") }).to_string()
+                json!({ "error": format!("Invalid params JSON: {e}") })
             );
             return;
         }
@@ -79,12 +74,12 @@ fn main() {
     // Run
     let result = run_simulation(&params_json, max_steps);
 
-    // Print JSON result on stdout (like Python)
+    // Print JSON result to stdout
     match serde_json::to_string(&result) {
         Ok(s) => println!("{s}"),
         Err(e) => println!(
             "{}",
-            json!({ "error": format!("Failed to serialize result: {e}") }).to_string()
+            json!({ "error": format!("Failed to serialize result: {e}") })
         ),
     }
 }
@@ -117,7 +112,7 @@ fn run_simulation(params_raw: &serde_json::Value, max_steps: i64) -> SimResult {
     };
 
     // Apply params (global patch approach)
-    // Ideally do this with a guard that restores after the run.
+    // Apply params globally (note: settings uses global state)
     if let Some(v) = params.add_neuron {
         settings::set_add_neuron(v);
     }
@@ -134,12 +129,10 @@ fn run_simulation(params_raw: &serde_json::Value, max_steps: i64) -> SimResult {
         settings::set_prey_init_mut(v);
     }
 
-    // Create game using your encapsulated logic
+    // Initialize game instance
     let seed = params.seed.unwrap_or(settings::SEED);
     let mut game = Game::new(
         None, // DataManager is not used in headless mode
-        params.pred_init_numb.unwrap(),
-        params.prey_init_numb.unwrap(),
         params.pred_init_numb.unwrap(),
         params.prey_init_numb.unwrap(),
         params.max_pred_count.unwrap(),

@@ -9,8 +9,8 @@ const WARMUP_FRAMES: usize = 200;
 const MEASURE_FRAMES: usize = 2000;
 const RUNS: usize = 7;
 
-// Wenn true: nach JEDEM Run coarse_prof Breakdown drucken (viel Output).
-// Wenn false: nur für einen "repräsentativen" Run (z.B. Run 1).
+// If a coarse_prof breakdown should be printed after every run.
+// If false, only one representative run (e.g., Run 1) will be printed.
 const PRINT_BREAKDOWN_EACH_RUN: bool = true;
 
 fn build_game() -> Game {
@@ -26,7 +26,7 @@ fn build_game() -> Game {
 
 fn step(game: &mut Game, frames: usize) {
     for _ in 0..frames {
-        let frame = game.next_frame_sequential(); // nutzt deine coarse_prof::profile! scopes
+        let frame = game.next_frame_sequential(); // Uses coarse_prof::profile! scopes
         black_box(frame);
     }
 }
@@ -50,11 +50,11 @@ fn main() {
     for run in 0..RUNS {
         let mut game = build_game();
 
-        // Warmup (Caches/CPU hochfahren, JIT gibt’s nicht, aber Branch predictor & caches existieren)
+        // Warmup phase (Branch predictor & cache warming)
         step(&mut game, WARMUP_FRAMES);
 
-        // WICHTIG: Warmup aus dem Profiling rauswerfen
-        coarse_prof::reset(); // Reset profiling information :contentReference[oaicite:1]{index=1}
+        // IMPORTANT: Exclude warmup from profiling
+        coarse_prof::reset();
 
         let start = Instant::now();
         step(&mut game, MEASURE_FRAMES);
@@ -85,7 +85,7 @@ fn main() {
             coarse_prof::write(&mut std::io::stdout()).unwrap(); // coarse-prof hierarchical timing :contentReference[oaicite:2]{index=2}
         }
 
-        // Damit der nächste Run nicht auf altem Profiling-Müll aufbaut
+        // Reset profiling data for the next run
         coarse_prof::reset();
     }
 

@@ -6,7 +6,8 @@ use predator_vs_prey::data_manager::AnimalType;
 use predator_vs_prey::game::Game;
 use predator_vs_prey::settings::{self, DEFAULT_DATA_FILE};
 use predator_vs_prey::visualization::{
-    draw_frame, draw_game_stats, draw_neural_network, draw_population_graph_fullscreen_live, graph_enabled, window_conf,
+    draw_frame, draw_game_stats, draw_neural_network, draw_population_graph_fullscreen_live,
+    graph_enabled, window_conf,
 };
 
 use macroquad::prelude::*;
@@ -68,7 +69,7 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
     let mut speed_multiplier: usize = 1;
     let mut frame = game.next_frame();
 
-    //Simulation and graph mode for --graph:
+    // Simulation and graph mode for --graph option
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum ViewMode {
         Simulation,
@@ -115,8 +116,8 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
             for _ in 0..speed_multiplier {
                 frame = game.next_frame();
             }
-            // If speeding up, we might skip drawing some frames, which is intended.
-            // We only draw the LAST calculated frame of this batch.
+            // Skip drawing intermediate frames when speeding up.
+            // Only the last calculated frame of the batch is drawn.
         }
 
         // Handle mouse input to select/deselect animals
@@ -129,9 +130,9 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
             }
         }
 
-      let (pred_count, prey_count) = frame.counts();
+        let (pred_count, prey_count) = frame.counts();
 
-        // Collect data ONLY if graph is enabled
+        // Collect data only if graph is enabled
         if graph_on {
             pop_history.push((pred_count, prey_count));
         }
@@ -158,7 +159,13 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
                     }
                 }
 
-                draw_game_stats(pred_count, prey_count, game.frame_count, game.longest_pred_lifespan, game.longest_prey_lifespan);
+                draw_game_stats(
+                    pred_count,
+                    prey_count,
+                    game.frame_count,
+                    game.longest_pred_lifespan,
+                    game.longest_prey_lifespan,
+                );
 
                 if graph_on {
                     draw_text(
@@ -173,10 +180,15 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
 
             ViewMode::Graph => {
                 draw_population_graph_fullscreen_live(&pop_history);
-                draw_game_stats(pred_count, prey_count, game.frame_count, game.longest_pred_lifespan, game.longest_prey_lifespan);
+                draw_game_stats(
+                    pred_count,
+                    prey_count,
+                    game.frame_count,
+                    game.longest_pred_lifespan,
+                    game.longest_prey_lifespan,
+                );
             }
         }
-
 
         // Draw speed/status
         let status_x = settings::SCREEN_WIDTH as f32 + 15.0;

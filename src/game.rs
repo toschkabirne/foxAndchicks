@@ -13,7 +13,7 @@ use macroquad::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
 
-// main structs and logic for the game itself -> main should be light, just setup and loop
+// Main structs and logic for the game. Main.rs handles setup and the game loop.
 pub struct Game {
     pub frame_count: usize,
     predators: Vec<Predator>,
@@ -121,7 +121,7 @@ impl Game {
     ) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
 
-        // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
+        // Spawn initial predators and prey
         let predators: Vec<Predator> = (0..num_preds)
             .map(|_| {
                 Predator::new(
@@ -154,7 +154,7 @@ impl Game {
         let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_size_pred, world_w, world_h);
         let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_size_prey, world_w, world_h);
 
-        let data_manager = file_name.map(|name| DataManager::new(name));
+        let data_manager = file_name.map(DataManager::new);
 
         Game {
             frame_count: 0,
@@ -163,7 +163,7 @@ impl Game {
             spatial_hash_preds,
             spatial_hash_preys,
             max_predators: max_preds,
-            max_preys: max_preys,
+            max_preys,
             data_manager,
             scratch_idxs: Vec::new(),
             rng,
@@ -202,9 +202,9 @@ impl Game {
 
         // PARALLEL: Sense and move predators
         // Each predator independently senses nearby preys and computes its movement
-        self.predators.par_iter_mut().for_each_init(
-            || Vec::<usize>::new(),
-            |scratch, pred| {
+        self.predators
+            .par_iter_mut()
+            .for_each_init(Vec::new, |scratch, pred| {
                 if pred.repro_cooldown > 0 {
                     pred.repro_cooldown -= 1;
                 }
@@ -216,8 +216,7 @@ impl Game {
                 let inputs = pred.get_inputs(scratch.iter().filter_map(|&i| preys_ref.get(i)));
 
                 pred.move_step(&inputs);
-            },
-        );
+            });
 
         // SEQUENTIAL: Hunting phase (requires mutable shared state for eaten_prey_ids)
         let mut eaten_prey_ids: HashSet<usize> = HashSet::new();
@@ -267,17 +266,16 @@ impl Game {
         let hash_preds: &SpatialHash = &self.spatial_hash_preds;
 
         // PARALLEL: Sense and move preys
-        self.preys.par_iter_mut().for_each_init(
-            || Vec::<usize>::new(),
-            |scratch, prey| {
+        self.preys
+            .par_iter_mut()
+            .for_each_init(Vec::new, |scratch, prey| {
                 hash_preds.query_into(scratch, prey.core.pos.x, prey.core.pos.y);
 
                 // SAFETY: We only read from self.predators here, no mutation
                 let inputs = prey.get_inputs(scratch.iter().filter_map(|&i| preds_ref.get(i)));
 
                 prey.move_step(&inputs);
-            },
-        );
+            });
 
         // SEQUENTIAL: Reproduction phase (requires RNG and counting newborns)
         let allowed_newborns = self.max_preys.saturating_sub(self.preys.len());
@@ -296,7 +294,7 @@ impl Game {
         Frame::new(&self.predators, &self.preys, self.frame_count)
     }
 
-    // this is used for profiling purposes
+    // Used for profiling purposes
     pub fn next_frame_sequential(&mut self) -> Frame {
         self.frame_count += 1;
 

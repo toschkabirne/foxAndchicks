@@ -283,7 +283,7 @@ fn compute_stats(times: &[Duration]) -> Stats {
     let sum: f64 = ms.iter().sum();
     let mean = sum / n;
 
-    let median = if ms.len() % 2 == 0 {
+    let median = if ms.len().is_multiple_of(2) {
         (ms[ms.len() / 2 - 1] + ms[ms.len() / 2]) / 2.0
     } else {
         ms[ms.len() / 2]

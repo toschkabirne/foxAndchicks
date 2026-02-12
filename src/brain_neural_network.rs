@@ -21,8 +21,7 @@ const WEIGHT: f32 = 1.0;
 const FULLY_CONNECTED: bool = false;
 /// Sigmoid activation with adjustable steepness.
 ///
-/// Design rationale: Sigmoid squashes values to (0, 1) range. The parameters
-/// (a = 1.5, b = 0.0) control steepness and offset.
+/// The Sigmoid function maps values to the (0, 1) range.
 pub fn sigmoid(x: f32) -> f32 {
     let a = 3.5; // steepness of curve
     let b = 3.0; // offset of curve
@@ -36,7 +35,7 @@ pub fn re_ac(x: f32) -> f32 {
 
 /// Hyperbolic tangent activation (general purpose).
 ///
-/// Design rationale: tanh squashes to (-1, 1) range
+/// The Hyperbolic tangent function maps values to the (-1, 1) range.
 pub fn act_func(x: f32) -> f32 {
     let a = 1.5;
     act_tanh(a * x)
@@ -48,9 +47,7 @@ pub fn act_tanh(x: f32) -> f32 {
 
 /// Specialized activation for speed output.
 ///
-/// Design rationale: Speed must be in [0, 1] range (can't move backward).
-/// - Input 0 produces sigmoid(-1.5) ≈ 0.18 (slow movement)
-/// - Input needs to be > 1.5 to get significant speed
+/// Specialized activation for speed output, mapping to [0, 1].
 pub fn act_speed(x: f32) -> f32 {
     sigmoid(x)
 }
@@ -82,7 +79,7 @@ pub struct NeuralNetwork {
     pub neuron_number: usize,
 
     /// Topological ordering of hidden nodes for evaluation.
-    /// Updated by infinity_loop() when new connections are added.
+    /// Updated during cycle detection when new connections are added.
     pub eval_order: Vec<usize>,
 
     /// Connection weights from inputs (+ bias) to outputs/hidden nodes.
@@ -111,7 +108,6 @@ impl NeuralNetwork {
     ///
     /// Initial structure: just inputs, bias, and outputs (no hidden neurons).
     /// Hidden neurons are added later through mutation.
-
     pub fn new<R: Rng>(
         num_inputs: usize,
         num_outputs: usize,
@@ -143,7 +139,7 @@ impl NeuralNetwork {
         };
 
         if FULLY_CONNECTED {
-            // Initialize the NN to be fully connected, every input neuron is connected with each output neuron, no hidden neurons yet
+            // Initialize the network with full connectivity between input and output layers.
             for row in nn.input_matrix.iter_mut() {
                 for val in row.iter_mut() {
                     let mut w = rng.gen_range(-WEIGHT..WEIGHT);
@@ -173,17 +169,17 @@ impl NeuralNetwork {
 
     /// Handles Mutation Logic of the Neural Network
     pub fn mutate<R: Rng>(&mut self, rng: &mut R) {
-        // LOGIC ADDS NEURON ON EXISTING CONNECTION
+        // Chance to add a new neuron on an existing connection
         if rng.gen::<f32>() < add_neuron() {
             self.create_connected_neuron(rng);
         }
 
-        // Add Weight
+        // Chance to add a new weight
         if rng.gen::<f32>() < add_weight() {
             self.create_new_connection(rng);
         }
 
-        // Change Weight
+        // Chance to modify an existing weight
         if rng.gen::<f32>() < change_weight() {
             self.change_weight(rng);
         }
@@ -191,8 +187,7 @@ impl NeuralNetwork {
 
     /// Handles Forward Pass of the Neural Network
     pub fn forward_vectorized(&mut self, inputs: &[f32], energy_factor: f32) -> [f32; 2] {
-        // 1. Prepare input activations
-        // We can reuse a pre-allocated vector if we want, but let's just make a new one for safety first
+        // 1. Prepare input activations by combining inputs with the bias.
         let mut in_act = Vec::with_capacity(self.num_inputs + 1);
         in_act.extend_from_slice(inputs);
         in_act.push(self.bias * energy_factor);
@@ -206,7 +201,6 @@ impl NeuralNetwork {
         }
 
         // 3. Hidden evaluation in topological order
-        // eval_order contains indices into 'activations' list (which corresponds to hidden/output nodes)
         let hidden_act_start = self.num_outputs;
         for &order in &self.eval_order {
             // order is index in activations
@@ -341,15 +335,14 @@ impl NeuralNetwork {
     ///  ----------------------------------------------------
     /// HELPER FUNCTIONS - Mutation
     ///  ----------------------------------------------------
-
-    /// Creates a New Nueron on an existing connection
+    /// Split an existing connection by creating a new neuron in between.
     fn create_connected_neuron<R: Rng>(&mut self, rng: &mut R) {
         let in_bi = self.num_inputs + 1;
         let hidden_start = in_bi + self.num_outputs;
 
         let mut connections = Vec::new();
 
-        // COLLECT ALL CONNECTIONS
+        // Collect all existing connections
         // From input matrix
         for (r, row) in self.input_matrix.iter().enumerate() {
             for (c, &w) in row.iter().enumerate() {
@@ -368,9 +361,7 @@ impl NeuralNetwork {
             }
         }
 
-        // CHOOSE RANDOM CONNECTION
-        // Deletes old connection (source -> target), and creates new connection
-        // with new neuron (source -> new -> target)
+        // Select a random connection to split: source -> target becomes source -> new -> target.
         if !connections.is_empty() {
             let idx = rng.gen_range(0..connections.len());
             let (source, target, weight) = connections[idx];
@@ -391,8 +382,7 @@ impl NeuralNetwork {
         }
     }
 
-    /// Creates a new connection between two existing neurons,
-    /// infinity loop checks if connection is valid, no circles allowed
+    /// Creates a new connection between two existing neurons, preventing cycles.
     fn create_new_connection<R: Rng>(&mut self, rng: &mut R) {
         let in_bi = self.num_inputs + 1;
         let hidden_start = in_bi + self.num_outputs;
@@ -403,8 +393,7 @@ impl NeuralNetwork {
         valid_sources.extend(hidden_start..self.neuron_number);
 
         let source = valid_sources[rng.gen_range(0..valid_sources.len())];
-        // target can be any hidden or output node
-        // range: [in_bi, total)
+        // Target can be any hidden or output node
         let target = rng.gen_range(in_bi..self.neuron_number);
 
         // Check if connection exists
@@ -469,28 +458,26 @@ impl NeuralNetwork {
         }
     }
 
-    ///  ----------------------------------------------------
-    /// HELPER FUNCTIONS - CHECKS FOR CYLES
-    ///  ----------------------------------------------------
+    // /// HELPER FUNCTIONS - CHECKS FOR CYLES
+    // ///  ----------------------------------------------------
 
-    // Preserving original algorithm logic for cycle detection as requested
+    // Cycle detection logic
     pub fn infinity_loop(&mut self, source: usize, target: usize) -> bool {
         let in_bi = self.num_inputs + 1;
         let in_bi_out = in_bi + self.num_outputs;
         let hidden_start = in_bi_out;
 
-        // only if BOTH are hidden ids (because inputs->hidden or hidden->output can't form simple cycles in this feedforward-ish structure unless back connections exist)
-        // logic from Python: check if adding edge source->target creates cycle
+        // Check for cycles only if both nodes are in the hidden layer
         if source >= in_bi_out && target >= in_bi_out {
             let ot_hi = self.neuron_number - in_bi; // outputs + hidden count
 
-            // dummy insert
+            // Temporarily add the connection to check for cycles
             self.hidden_matrix[target - in_bi][source - hidden_start] = 1.0;
 
             let mut sample_order: Vec<usize> = Vec::new();
             let mut index_list: Vec<usize> = (self.num_outputs..ot_hi).collect(); // hidden indices only
 
-            // remove "null rows" (nodes with no incoming edges from hidden layer)
+            // Remove nodes with no incoming edges from the hidden layer
             let mut k = 0;
             while k < index_list.len() {
                 let i = index_list[k];
@@ -509,9 +496,7 @@ impl NeuralNetwork {
 
                 while j < index_list.len() {
                     let i = index_list[j];
-                    // check incoming from remaining hidden nodes
-                    // ie. is there any node in 'index_list' that has a connection to 'i'?
-                    // The logic here seems to checking if `i` has NO incoming connections from the *remaining* pool.
+                    // Check if the node has any incoming connections from the remaining set
 
                     let no_incoming = index_list.iter().all(|&col| {
                         // col is activation index; convert to hidden_matrix column index
@@ -527,7 +512,7 @@ impl NeuralNetwork {
                 }
 
                 if before == index_list.len() {
-                    // cycle detected -> revert dummy
+                    // Cycle detected; revert temporary connection
                     self.hidden_matrix[target - in_bi][source - hidden_start] = 0.0;
                     return true;
                 }
@@ -565,7 +550,7 @@ impl NeuralNetwork {
 
             // Iterate only over hidden rows in hidden_matrix
             // Rows: self.num_outputs .. (self.num_outputs + hidden_count)
-            for r_local in 0..hidden_count {
+            for (r_local, degree) in in_degree.iter_mut().enumerate().take(hidden_count) {
                 let r_matrix = self.num_outputs + r_local;
                 // r_matrix is index in hidden_matrix
                 // Corresponds to node `hidden_start + r_local`
@@ -574,15 +559,15 @@ impl NeuralNetwork {
                     if w != 0.0 {
                         // Edge from c_local to r_local
                         adj[c_local].push(r_local);
-                        in_degree[r_local] += 1;
+                        *degree += 1;
                     }
                 }
             }
 
             // 3. Kahn's Algorithm
             let mut queue = Vec::new();
-            for i in 0..hidden_count {
-                if in_degree[i] == 0 {
+            for (i, &degree) in in_degree.iter().enumerate().take(hidden_count) {
+                if degree == 0 {
                     queue.push(i);
                 }
             }

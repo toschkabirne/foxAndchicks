@@ -59,14 +59,7 @@ fn main() {
             writeln!(results_file, "Seed {}: SUCCESS", current_seed).unwrap();
         } else {
             println!(" FAILED ({})", fail_reason);
-            // We only need to save successful seeds, but maybe logging failures is good for debugging?
-            // The prompt said "If scucesfully reached, we save the seed number."
-            // So we strictly interpret this as: only save success.
-            // However, the prompt also said "Write the results to an output file", implying potentially all results or just the "results of the search".
-            // I'll stick to just writing success to be clean, or I can write everything.
-            // "If scucesfully reached, we save the seed number." strongly suggests filtering.
-            // But "Write the results to an output file" could mean a log.
-            // I will write "FAILED" too so the user knows checks were run.
+            // Log failure case as well for completeness
             writeln!(
                 results_file,
                 "Seed {}: FAILED ({})",

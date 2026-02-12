@@ -1,6 +1,5 @@
-/// This version uses the heap allocation
-/// In spatial hash it uses the query method to get the indices of the nearby preys
-/// Thus it creates new Vecs each Frame
+/// This version uses heap allocation for spatial hash queries.
+/// It creates new Vectors for each query instead of reusing a scratch buffer.
 use crate::animals::{Predator, Prey};
 use crate::data_manager::{DataManager, Frame, IndexedFrameReader};
 use crate::settings::{self};
@@ -12,7 +11,7 @@ use macroquad::prelude::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
 
-// main structs and logic for the game itself -> main should be light, just setup and loop
+// Main structs and logic for the game. Main.rs handles setup and the game loop.
 pub struct Game {
     pub frame_count: usize,
     predators: Vec<Predator>,
@@ -68,7 +67,7 @@ impl Game {
     ) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
 
-        // Spawn initial predators and preys as Rc<RefCell<>> for shared mutability
+        // Spawn initial predators and prey
         let predators: Vec<Predator> = (0..num_preds)
             .map(|_| {
                 Predator::new(
@@ -101,7 +100,7 @@ impl Game {
         let spatial_hash_preds: SpatialHash = SpatialHash::new(cell_size_pred, world_w, world_h);
         let spatial_hash_preys: SpatialHash = SpatialHash::new(cell_size_prey, world_w, world_h);
 
-        let data_manager = file_name.map(|name| DataManager::new(name));
+        let data_manager = file_name.map(DataManager::new);
 
         Game {
             frame_count: 0,
@@ -110,7 +109,7 @@ impl Game {
             spatial_hash_preds,
             spatial_hash_preys,
             max_predators: max_preds,
-            max_preys: max_preys,
+            max_preys,
             data_manager,
             rng,
             longest_pred_lifespan: 0,

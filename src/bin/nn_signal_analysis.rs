@@ -7,8 +7,8 @@
 //! Goal: Understand what output signal strengths result from various input configurations
 //! to inform activation function tuning.
 
-use predator_vs_prey::brain_neural_network::{act_angle, act_speed, sigmoid, NeuralNetwork};
-use predator_vs_prey::settings::{bias, PRED_SIGHT_COUNT, PREY_SIGHT_COUNT};
+use predator_vs_prey::brain_neural_network::{act_angle, act_speed, NeuralNetwork};
+use predator_vs_prey::settings::{bias, PREY_SIGHT_COUNT};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::fs::File;
@@ -207,7 +207,7 @@ fn run_nested_batch_test(
         // Test it with multiple random input patterns
         for sample_idx in 0..samples_per_network {
             // Seed for inputs depends on net AND sample, so we get unique patterns
-            let input_seed = (net_idx * 1000 + sample_idx) as usize;
+            let input_seed = net_idx * 1000 + sample_idx;
 
             let inputs = create_input_vector(
                 num_inputs,
@@ -406,7 +406,7 @@ fn write_markdown_report(path: &str, results: &[(TestConfig, OutputStats)], num_
             )
             .unwrap();
         }
-        writeln!(file, "").unwrap();
+        writeln!(file).unwrap();
     }
 
     // Summary

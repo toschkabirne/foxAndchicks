@@ -20,8 +20,7 @@ use std::sync::RwLock;
 //          GAME SETTINGS
 // ----------------------------------------
 
-// Mutation / Bias params, only change the numbers, not the variables
-// Adjusted to match YouTube implementation:
+// Mutation / Bias params.
 // - new_node_proba: 0.05 (5% chance to add node)
 // - new_conn_proba: 0.7 (70% chance to add connection)
 // - offset_weight_proba: 0.5 (50% chance to mutate weight)
@@ -33,11 +32,11 @@ static BIAS: RwLock<f32> = RwLock::new(0.5);
 
 // This is the step size applied when a weight is changed
 pub const MUT_CHANGE_STEP: f32 = 0.05;
-// Initial mutations: YouTube uses 10, giving networks more initial structure
+// Initial mutations: giving networks more initial structure
 static PREY_INIT_MUT: RwLock<usize> = RwLock::new(15);
 static PRED_INIT_MUT: RwLock<usize> = RwLock::new(15);
 
-pub const SEED: u64 = 61;
+pub const SEED: u64 = 420;
 
 pub const PRED_INIT_NUMB: usize = 110;
 pub const PREY_INIT_NUMB: usize = 450;
@@ -57,10 +56,10 @@ pub const SCREEN_HEIGHT: i32 = 1000;
 pub const FRAMES_PER_SECOND: i32 = 30;
 
 // ----------------------------------------
-//          PREDATOR SPCIFIC parameters
+//          PREDATOR SPECIFIC parameters
 // ----------------------------------------
 
-// This is the theoretical time, how long it needs to die (IN SECONDS)
+// This is the theoretical time to die (IN SECONDS)
 const PRED_LIFESPAN_REST: f32 = 30.0;
 const PRED_LIFESPAN_SPRINT: f32 = 20.0;
 
@@ -68,7 +67,7 @@ const PRED_LIFESPAN_SPRINT: f32 = 20.0;
 pub const PRED_ENERGY_GAIN: f32 = PRED_ENERGY * 0.4;
 
 // number of frames until reproduction cooldown is over
-pub const REPRO_COOLDOWN_FRAMES: i32 = 1 * FRAMES_PER_SECOND;
+pub const REPRO_COOLDOWN_FRAMES: i32 = FRAMES_PER_SECOND;
 
 // This is the theoretical time, how long it needs to cross the screen width
 pub const PRED_TIME_MOVE_DIST_WIDTH: f32 = 15.0;
@@ -160,7 +159,7 @@ pub const PREY_REST_ENERGY_GAIN: f32 =
 pub const PREY_REPRODUCATION_RATE: f32 = PREY_SECONDS_UNTIL_BIRTH * FRAMES_PER_SECOND as f32;
 
 // ------------------------------------------------------------
-//                      HELPER FUNCTIONS FOR MUTATIONSSTUFF
+//                      HELPER FUNCTIONS FOR MUTATION SETTINGS
 // ------------------------------------------------------------
 
 pub fn prey_init_mut() -> usize {

@@ -22,9 +22,9 @@ fn window_conf() -> Conf {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TestMode {
-    /// Default: prey is NN agent, predator is keyboard dummy (you hunt)
+    /// Default: prey is NN agent, predator is manually controlled
     TestPrey,
-    /// Predator is NN agent, prey is keyboard dummy (you flee/tease)
+    /// Predator is NN agent, prey is manually controlled
     TestPredator,
 }
 

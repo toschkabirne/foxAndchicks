@@ -83,7 +83,13 @@ pub fn draw_wrapped_line(
 }
 
 /// Draws the statistics panel on the right side of the game field
-pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize, longest_pred_lifespan: i32, longest_prey_lifespan: i32) {
+pub fn draw_game_stats(
+    pred_count: usize,
+    prey_count: usize,
+    frame_count: usize,
+    longest_pred_lifespan: i32,
+    longest_prey_lifespan: i32,
+) {
     let panel_x = settings::SCREEN_WIDTH as f32;
     draw_rectangle(
         panel_x,
@@ -92,14 +98,7 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize,
         SCREEN_HEIGHT as f32,
         Color::from_rgba(30, 30, 30, 255),
     );
-    draw_line(
-        panel_x,
-        0.0,
-        panel_x,
-        SCREEN_HEIGHT as f32,
-        2.0,
-        WHITE,
-    );
+    draw_line(panel_x, 0.0, panel_x, SCREEN_HEIGHT as f32, 2.0, WHITE);
 
     let text_x = panel_x + 15.0;
     draw_text("Statistics", text_x, 30.0, 24.0, WHITE);
@@ -115,8 +114,20 @@ pub fn draw_game_stats(pred_count: usize, prey_count: usize, frame_count: usize,
     draw_text(&text_prey, text_x, 95.0, 20.0, settings::PREY_COLOR);
     draw_text(&frame_text, text_x, 130.0, 20.0, WHITE);
 
-    draw_text(&longest_pred_text, text_x, 230.0, 20.0, settings::PRED_COLOR);
-    draw_text(&longest_prey_text, text_x, 260.0, 20.0, settings::PREY_COLOR);
+    draw_text(
+        &longest_pred_text,
+        text_x,
+        230.0,
+        20.0,
+        settings::PRED_COLOR,
+    );
+    draw_text(
+        &longest_prey_text,
+        text_x,
+        260.0,
+        20.0,
+        settings::PREY_COLOR,
+    );
 }
 
 pub fn draw_population_graph_fullscreen(
@@ -134,7 +145,13 @@ pub fn draw_population_graph_fullscreen(
     let area_w = (settings::SCREEN_WIDTH) as f32;
     let area_h = (settings::SCREEN_HEIGHT as f32 - PLAYBACK_CONTROLS_HEIGHT).max(1.0);
 
-    draw_rectangle(area_x, area_y, area_w, area_h, Color::from_rgba(22, 22, 22, 255));
+    draw_rectangle(
+        area_x,
+        area_y,
+        area_w,
+        area_h,
+        Color::from_rgba(22, 22, 22, 255),
+    );
     draw_text(
         "Population over time (press G to return)",
         area_x + 20.0,
@@ -154,9 +171,8 @@ pub fn draw_population_graph_fullscreen(
     let pad_t = 55.0;
     let pad_b = 35.0;
 
-
     // Additional space
-    let legend_h = 40.0;   // space for legend text
+    let legend_h = 40.0; // space for legend text
     let bottom_margin = 20.0;
 
     let plot_x0 = area_x + pad_l;
@@ -165,10 +181,24 @@ pub fn draw_population_graph_fullscreen(
     let plot_h = (area_h - pad_t - pad_b - legend_h - bottom_margin).max(1.0);
 
     // Axes
-    draw_line(plot_x0, plot_y0, plot_x0, plot_y0 + plot_h, 2.0, Color::from_rgba(90, 90, 90, 255));
-    draw_line(plot_x0, plot_y0 + plot_h, plot_x0 + plot_w, plot_y0 + plot_h, 2.0, Color::from_rgba(90, 90, 90, 255));
+    draw_line(
+        plot_x0,
+        plot_y0,
+        plot_x0,
+        plot_y0 + plot_h,
+        2.0,
+        Color::from_rgba(90, 90, 90, 255),
+    );
+    draw_line(
+        plot_x0,
+        plot_y0 + plot_h,
+        plot_x0 + plot_w,
+        plot_y0 + plot_h,
+        2.0,
+        Color::from_rgba(90, 90, 90, 255),
+    );
 
-    // Precompute max + means over the whole recording (stable scaling like your picture)
+    // Precompute max + means over the whole recording for stable scaling
     let mut max_y: usize = 1;
     let mut sum_pred: f64 = 0.0;
     let mut sum_prey: f64 = 0.0;
@@ -184,24 +214,62 @@ pub fn draw_population_graph_fullscreen(
     // Grid + labels (0, 50%, 100%)
     for frac in [0.0_f32, 0.5, 1.0] {
         let y = plot_y0 + plot_h * (1.0 - frac);
-        draw_line(plot_x0, y, plot_x0 + plot_w, y, 1.0, Color::from_rgba(45, 45, 45, 255));
+        draw_line(
+            plot_x0,
+            y,
+            plot_x0 + plot_w,
+            y,
+            1.0,
+            Color::from_rgba(45, 45, 45, 255),
+        );
         let label_val = (max_y_f * frac).round() as usize;
-        draw_text(&format!("{}", label_val), area_x + 18.0, y + 6.0, 18.0, Color::from_rgba(200, 200, 200, 255));
+        draw_text(
+            &format!("{}", label_val),
+            area_x + 18.0,
+            y + 6.0,
+            18.0,
+            Color::from_rgba(200, 200, 200, 255),
+        );
     }
 
-    // Mean lines (like your attachment)
+    // Mean lines
     let mean_pred_y = plot_y0 + plot_h * (1.0 - (mean_pred / max_y_f));
     let mean_prey_y = plot_y0 + plot_h * (1.0 - (mean_prey / max_y_f));
-    draw_line(plot_x0, mean_pred_y, plot_x0 + plot_w, mean_pred_y, 2.0, Color::from_rgba(180, 180, 180, 180));
-    draw_line(plot_x0, mean_prey_y, plot_x0 + plot_w, mean_prey_y, 2.0, Color::from_rgba(180, 180, 180, 180));
+    draw_line(
+        plot_x0,
+        mean_pred_y,
+        plot_x0 + plot_w,
+        mean_pred_y,
+        2.0,
+        Color::from_rgba(180, 180, 180, 180),
+    );
+    draw_line(
+        plot_x0,
+        mean_prey_y,
+        plot_x0 + plot_w,
+        mean_prey_y,
+        2.0,
+        Color::from_rgba(180, 180, 180, 180),
+    );
 
-    draw_text("Mean predators", plot_x0 + 10.0, mean_pred_y - 8.0, 18.0, settings::PRED_COLOR);
-    draw_text("Mean preys",     plot_x0 + 10.0, mean_prey_y - 8.0, 18.0, settings::PREY_COLOR);
+    draw_text(
+        "Mean predators",
+        plot_x0 + 10.0,
+        mean_pred_y - 8.0,
+        18.0,
+        settings::PRED_COLOR,
+    );
+    draw_text(
+        "Mean preys",
+        plot_x0 + 10.0,
+        mean_prey_y - 8.0,
+        18.0,
+        settings::PREY_COLOR,
+    );
 
     // X mapping across the full timeline
-    let x_for_frame = |fi: usize| -> f32 {
-        plot_x0 + (fi as f32 / (total_frames as f32 - 1.0)) * plot_w
-    };
+    let x_for_frame =
+        |fi: usize| -> f32 { plot_x0 + (fi as f32 / (total_frames as f32 - 1.0)) * plot_w };
 
     // Downsample to ~one point per pixel
     let step = ((total_frames as f32 / plot_w).ceil() as usize).max(1);
@@ -233,9 +301,15 @@ pub fn draw_population_graph_fullscreen(
     // Current frame marker
     if current_frame < total_frames {
         let x = x_for_frame(current_frame);
-        draw_line(x, plot_y0, x, plot_y0 + plot_h, 2.0, Color::from_rgba(220, 220, 220, 120));
+        draw_line(
+            x,
+            plot_y0,
+            x,
+            plot_y0 + plot_h,
+            2.0,
+            Color::from_rgba(220, 220, 220, 120),
+        );
     }
-
 }
 
 pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
@@ -248,7 +322,13 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
     let area_w = settings::SCREEN_WIDTH as f32;
     let area_h = settings::SCREEN_HEIGHT as f32;
 
-    draw_rectangle(area_x, area_y, area_w, area_h, Color::from_rgba(22, 22, 22, 255));
+    draw_rectangle(
+        area_x,
+        area_y,
+        area_w,
+        area_h,
+        Color::from_rgba(22, 22, 22, 255),
+    );
     draw_text(
         "Population over time (press G to return)",
         area_x + 20.0,
@@ -259,7 +339,13 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
 
     let total_frames = history.len();
     if total_frames < 2 {
-        draw_text("Collecting data...", area_x + 20.0, area_y + 60.0, 20.0, WHITE);
+        draw_text(
+            "Collecting data...",
+            area_x + 20.0,
+            area_y + 60.0,
+            20.0,
+            WHITE,
+        );
         return;
     }
 
@@ -270,7 +356,7 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
     let pad_b = 35.0;
 
     // Additional space
-    let legend_h = 40.0;   // space for legend text
+    let legend_h = 40.0; // space for legend text
     let bottom_margin = 20.0;
 
     let plot_x0 = area_x + pad_l;
@@ -353,9 +439,9 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
         Color::from_rgba(180, 180, 180, 180),
     );
 
-    // Mean labels WITH live values
-    let base_offset = 8.0;     // label sits above its mean line
-    let min_sep = 20.0;        // keep labels from overlapping
+    // Mean labels with live values
+    let base_offset = 8.0; // label sits above its mean line
+    let min_sep = 20.0; // keep labels from overlapping
     let top_limit = plot_y0 + 14.0;
 
     let mut pred_label_y = (mean_pred_y - base_offset).max(top_limit);
@@ -387,9 +473,8 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
     );
 
     // X mapping across history so far
-    let x_for_frame = |fi: usize| -> f32 {
-        plot_x0 + (fi as f32 / (total_frames as f32 - 1.0)) * plot_w
-    };
+    let x_for_frame =
+        |fi: usize| -> f32 { plot_x0 + (fi as f32 / (total_frames as f32 - 1.0)) * plot_w };
 
     // Downsample to ~one point per pixel
     let step = ((total_frames as f32 / plot_w).ceil() as usize).max(1);
@@ -418,7 +503,7 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
         prev_prey = Some(prey_pt);
     }
 
-    // Current frame marker = “latest”
+    // Current frame marker (latest)
     let current_frame = total_frames - 1;
     let x = x_for_frame(current_frame);
     draw_line(
@@ -430,8 +515,6 @@ pub fn draw_population_graph_fullscreen_live(history: &[(usize, usize)]) {
         Color::from_rgba(220, 220, 220, 120),
     );
 }
-
-
 
 /// Draws all animals in the given frame.
 /// If `selected_animal` is specified, its sightlines are drawn even if `draw_all_sight_lines` is false.
@@ -767,10 +850,10 @@ pub fn draw_neural_network(nn: &NeuralNetwork, x: f32, y: f32, width: f32, heigh
     let mut node_pos: Vec<(f32, f32)> = vec![(0.0, 0.0); total_neurons];
 
     // Inputs (left)
-    for i in 0..num_inputs {
+    for (i, node) in node_pos.iter_mut().enumerate().take(num_inputs) {
         let px = x + 20.0;
         let py = y + (height / (num_inputs as f32 + 1.0)) * (i as f32 + 1.0);
-        node_pos[i] = (px, py);
+        *node = (px, py);
     }
 
     // Bias (left, below inputs)
@@ -800,19 +883,18 @@ pub fn draw_neural_network(nn: &NeuralNetwork, x: f32, y: f32, width: f32, heigh
         node_pos[id] = (px, py);
     }
 
-    // helper activation like python
+    // Helper to get activation value
     let get_activation = |id: usize| -> f32 {
         if id < num_inputs {
             inputs[id]
         } else if id == num_inputs {
-            1.0 // python: bias node drawn as 1.0
+            1.0 // bias node drawn as 1.0
         } else {
             activations[id - in_bi]
         }
     };
 
     // Draw edges from Input_Matrix: target rows correspond to (outputs+hidden)
-    // Python: rows, cols = nn.Input_Matrix.shape
     for r in 0..nn.input_matrix.len() {
         for c in 0..nn.input_matrix[r].len() {
             let weight = nn.input_matrix[r][c];
@@ -878,23 +960,22 @@ pub fn draw_neural_network(nn: &NeuralNetwork, x: f32, y: f32, width: f32, heigh
     }
 
     // Draw nodes
-    for id in 0..total_neurons {
+    for (id, (px, py)) in node_pos.iter().enumerate().take(total_neurons) {
         let val = get_activation(id);
-        let clamped = val.max(-1.0).min(1.0);
+        let clamped = val.clamp(-1.0, 1.0);
         let c_val = (clamped * 255.0) as i32;
 
         let mut color = if c_val > 0 {
             rgb(0, c_val as u8, 0)
         } else {
-            rgb(c_val.abs() as u8, 0, 0)
+            rgb(c_val.unsigned_abs() as u8, 0, 0)
         };
 
         if c_val.abs() < 20 {
             color = rgb(150, 150, 150);
         }
 
-        let (px, py) = node_pos[id];
-        draw_circle(px, py, 5.0, color);
-        draw_circle_lines(px, py, 5.0, 1.0, BLACK);
+        draw_circle(*px, *py, 5.0, color);
+        draw_circle_lines(*px, *py, 5.0, 1.0, BLACK);
     }
 }

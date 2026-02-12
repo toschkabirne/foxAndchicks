@@ -6,8 +6,11 @@ use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
+
+const BIN_PATH: &str = "target/release/headless_runner";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct Params {
@@ -63,7 +66,7 @@ fn generate_grid_params() -> Vec<Params> {
     let add_weights: Vec<f32> = vec![0.5, 0.6, 0.7];
 
     // change_weight: 0.6..0.9 (step 0.1) -> 0.6, 0.7, 0.8, 0.9
-    let change_weights: Vec<f32> = vec![0.68, 0.7, 0.8];
+    let change_weights: Vec<f32> = vec![0.6, 0.7, 0.8];
 
     // mutation: 20, 30, 40 (for both pred and prey init mut)
     let mutations: Vec<usize> = vec![10, 15];
@@ -82,10 +85,10 @@ fn generate_grid_params() -> Vec<Params> {
                             change_weight: Some(cw),
                             pred_init_mut: Some(mut_rate),
                             prey_init_mut: Some(mut_rate),
-                            max_pred_count: Some(175),
-                            max_prey_count: Some(800),
                             pred_init_numb: Some(110),
                             prey_init_numb: Some(450),
+                            max_pred_count: Some(175),
+                            max_prey_count: Some(800),
                             seed: Some(seed),
                         });
                     }
@@ -100,39 +103,22 @@ fn generate_grid_params() -> Vec<Params> {
 fn run_trial(params: &Params) -> Option<SimResult> {
     let params_json = serde_json::to_string(params).ok()?;
 
-    // Assume executable is in target/release/headless_runner
-    let output = Command::new("target/release/headless_runner")
+    let output = Command::new(BIN_PATH)
         .arg("--params")
         .arg(&params_json)
         .arg("--max_steps")
         .arg("40000")
-        .output();
-
-    // Fallback to cargo run if binary not found
-    let output = match output {
-        Ok(o) => o,
-        Err(_) => Command::new("cargo")
-            .arg("run")
-            .arg("--quiet")
-            .arg("--release")
-            .arg("--bin")
-            .arg("headless_runner")
-            .arg("--")
-            .arg("--params")
-            .arg(&params_json)
-            .arg("--max_steps")
-            .arg("40000")
-            .output()
-            .ok()?,
-    };
+        .output()
+        .ok()?; // If execution fails, just return None
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("Command failed with stderr: {}", stderr);
+        eprintln!("Runner failed: {}", stderr);
         return None;
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+
     match serde_json::from_str(&stdout) {
         Ok(result) => Some(result),
         Err(e) => {
@@ -175,7 +161,7 @@ fn main() {
         .filter(|p| {
             let param_json = serde_json::to_value(p)
                 .ok()
-                .and_then(|v| Some(v.to_string()))
+                .map(|v| v.to_string())
                 .unwrap_or_default();
             !failed_params.contains(&param_json)
         })
@@ -189,13 +175,26 @@ fn main() {
     println!("Total configurations: {}", total_trials);
     println!("Skipped (already failed): {}", total_trials - tests_to_run);
 
-    // Ensure we have a build first
-    let _ = Command::new("cargo")
+    // Build once
+    let status = Command::new("cargo")
         .arg("build")
         .arg("--release")
         .arg("--bin")
         .arg("headless_runner")
-        .status();
+        .status()
+        .expect("Failed to start cargo build");
+
+    if !status.success() {
+        panic!("Release build of headless_runner failed.");
+    }
+
+    // Fail fast if binary does not exist
+    if !Path::new(BIN_PATH).exists() {
+        panic!(
+            "Binary not found at '{}'. Build succeeded but file is missing.",
+            BIN_PATH
+        );
+    }
 
     let results_file = "param_search_results.json";
     let results_shared = Arc::new(Mutex::new(previous_results));

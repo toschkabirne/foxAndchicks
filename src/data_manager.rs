@@ -100,8 +100,7 @@ impl SimulationSettings {
     }
 }
 
-// Needed functionality
-// we want to be able to track animals across frames
+// Functionality to track animals across frames
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum AnimalType {
@@ -296,7 +295,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(predators: &Vec<Predator>, preys: &Vec<Prey>, tick: usize) -> Self {
+    pub fn new(predators: &[Predator], preys: &[Prey], tick: usize) -> Self {
         let mut animal_states = Vec::with_capacity(predators.len() + preys.len());
 
         for p in predators.iter() {
@@ -348,7 +347,6 @@ pub struct AnimalState {
     pub y: f32,
     pub angle: f32,
     pub animal_type: AnimalType,
-
 }
 
 ////////////////////////

@@ -107,10 +107,10 @@ fn main() {
                 println!("{} ({} steps)", "DIED".red(), res.steps);
             }
 
-            // Logic to find the "best".
-            // 1. Survival is best.
-            // 2. If multiple survive, maybe checks steps? (All survivors have 200k steps)
-            // 3. If none survive, whoever lasted longest.
+            // Determine the "best" result.
+            // 1. Survival is the primary criterion.
+            // 2. If multiple survive, use specific metrics (e.g., population health).
+            // 3. If none survive, select the longest duration.
 
             match &best_result {
                 None => best_result = Some(res),
@@ -118,11 +118,7 @@ fn main() {
                     if res.steps > current_best.steps {
                         best_result = Some(res);
                     } else if res.steps == current_best.steps {
-                        // Tie-breaker? Maybe population count?
-                        // For now, first one wins or overwrite?
-                        // "which parameter combination won" -> usually the one that survived.
-                        // If both survived, they are equal in terms of "winning" the survival challenge.
-                        // Let's keep the one with higher predator count as a tie breaker for "healthy ecosystem"?
+                        // Tie-breaker: If both survived, prioritize higher predator count as an indicator of a healthy ecosystem.
                         if res.final_predators > current_best.final_predators {
                             best_result = Some(res);
                         }
