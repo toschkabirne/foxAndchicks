@@ -16,10 +16,12 @@ use macroquad::prelude::*;
 async fn main() {
     let mut draw_sight_lines = true;
     let mut filename: Option<String> = None;
+    let mut extract_top_predators = false;
 
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
+            "--top-predators" => extract_top_predators = true,
             "--no-sight" | "--no-sight-lines" => draw_sight_lines = false,
             "--file" | "-f" => {
                 filename = Some(it.next().unwrap_or_else(|| DEFAULT_DATA_FILE.to_string()));
@@ -33,6 +35,7 @@ async fn main() {
                 println!("Options:");
                 println!("  --no-sight           Hide sight lines during simulation");
                 println!("  --file, -f <path>    Specify the output file path (if omitted, no data is saved)");
+                println!("  --top-predators      Export top predator brains periodically");
                 println!();
                 println!("Other binaries:");
                 println!("  cargo run --bin record -- [--file <path>] [--frames <num>]");
@@ -51,10 +54,10 @@ async fn main() {
     }
 
     println!("Running live simulation...");
-    run_live(filename.as_deref(), draw_sight_lines).await;
+    run_live(filename.as_deref(), draw_sight_lines, extract_top_predators).await;
 }
 
-async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
+async fn run_live(filename: Option<&str>, draw_sight_lines: bool, extract_top_predators: bool) {
     println!("Controls:");
     println!("  Space: Pause/Resume");
     println!("  Up/Down Arrow: Increase/decrease speed");
@@ -62,7 +65,7 @@ async fn run_live(filename: Option<&str>, draw_sight_lines: bool) {
     println!("  Escape: Quit");
     println!("  Click on animal: Select to view neural network");
 
-    let mut game = Game::new_default(filename);
+    let mut game = Game::new_default(filename, extract_top_predators);
     let mut selected_animal: Option<(AnimalType, usize)> = None;
 
     let mut paused = false;

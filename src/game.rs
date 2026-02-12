@@ -14,6 +14,10 @@ use rayon::prelude::*;
 use std::collections::HashSet;
 
 // Main structs and logic for the game. Main.rs handles setup and the game loop.
+/// How often (in ticks) the top predator brains are exported.
+const TOP_PREDATOR_EXPORT_INTERVAL: usize = 5000;
+
+// main structs and logic for the game itself -> main should be light, just setup and loop
 pub struct Game {
     pub frame_count: usize,
     predators: Vec<Predator>,
@@ -27,6 +31,7 @@ pub struct Game {
     rng: StdRng,
     pub longest_pred_lifespan: i32,
     pub longest_prey_lifespan: i32,
+    pub extract_top_predators: bool,
 }
 
 impl Game {
@@ -51,6 +56,12 @@ impl Game {
             .map(|p| p.core.survived_iters)
             .max()
             .unwrap_or(0)
+    }
+
+    /// Sum of `lifetime_kills` across all living predators.
+    /// This counts actual kills regardless of prey reproduction or predator reproduction.
+    pub fn total_predator_kills(&self) -> usize {
+        self.predators.iter().map(|p| p.lifetime_kills.max(0) as usize).sum()
     }
 
     /// Returns the actual filename (with timestamp) used for storing data, if any
@@ -119,6 +130,19 @@ impl Game {
         max_preys: usize,
         seed: u64,
     ) -> Self {
+        Self::new_with_options(file_name, num_preds, num_preys, max_preds, max_preys, seed, false)
+    }
+
+    /// Creates a new Game with custom parameters and optional top predator extraction
+    pub fn new_with_options(
+        file_name: Option<&str>,
+        num_preds: usize,
+        num_preys: usize,
+        max_preds: usize,
+        max_preys: usize,
+        seed: u64,
+        extract_top_predators: bool,
+    ) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
 
         // Spawn initial predators and prey
@@ -169,25 +193,67 @@ impl Game {
             rng,
             longest_pred_lifespan: 0,
             longest_prey_lifespan: 0,
+            extract_top_predators,
         }
     }
 
     /// Creates a new Game with default settings
-    pub fn new_default(file_name: Option<&str>) -> Self {
-        Game::new(
+    pub fn new_default(file_name: Option<&str>, extract_top_predators: bool) -> Self {
+        Game::new_with_options(
             file_name,
             settings::PRED_INIT_NUMB,
             settings::PREY_INIT_NUMB,
             settings::MAX_PRED_COUNT,
             settings::MAX_PREY_COUNT,
             settings::SEED,
+            extract_top_predators,
         )
+    }
+
+    /// Reset every predator's energy to `PRED_ENERGY`.
+    /// Used by the arena test to keep the top predator alive indefinitely.
+    pub fn refill_predator_energy(&mut self) {
+        for pred in &mut self.predators {
+            pred.core.energy = settings::PRED_ENERGY;
+        }
+    }
+
+    /// Inject a predator with a pre-built brain at the given position.
+    /// Used by the arena test binary to place a top predator.
+    pub fn inject_predator_with_brain(
+        &mut self,
+        x: f32,
+        y: f32,
+        energy: f32,
+        brain: crate::brain_neural_network::NeuralNetwork,
+    ) {
+        let core = crate::animals::AnimalCore::new_with_brain(
+            macroquad::prelude::vec2(x, y),
+            0.0,
+            energy,
+            brain,
+        );
+        let pred = Predator {
+            core,
+            eaten_prey: 0,
+            lifetime_kills: 0,
+            repro_cooldown: 0,
+        };
+        self.predators.push(pred);
     }
 
     pub fn next_frame(&mut self) -> Frame {
         self.frame_count += 1;
         self.longest_pred_lifespan = self.longest_pred_lifespan();
         self.longest_prey_lifespan = self.longest_prey_lifespan();
+
+        // --- Top predator brain export ---
+        if self.extract_top_predators
+            && self.frame_count % TOP_PREDATOR_EXPORT_INTERVAL == 0
+            && !self.predators.is_empty()
+        {
+            self.export_top_predator_brains();
+        }
 
         // ----------------------------
         // PREDATOR PHASE
@@ -297,6 +363,14 @@ impl Game {
     // Used for profiling purposes
     pub fn next_frame_sequential(&mut self) -> Frame {
         self.frame_count += 1;
+
+        // --- Top predator brain export ---
+        if self.extract_top_predators
+            && self.frame_count % TOP_PREDATOR_EXPORT_INTERVAL == 0
+            && !self.predators.is_empty()
+        {
+            self.export_top_predator_brains();
+        }
 
         // ----------------------------
         // PREDATOR PHASE
@@ -427,6 +501,56 @@ impl Game {
         }
 
         Frame::new(&self.predators, &self.preys, self.frame_count)
+    }
+
+    /// How many top predators to export per generation.
+    const TOP_PREDATOR_N: usize = 5;
+
+    /// Exports the brains of the top-N predators (by lifetime kill count)
+    /// to `top_predators/gen_{tick}_rank{1..N}.json`.  Called automatically every
+    /// `TOP_PREDATOR_EXPORT_INTERVAL` ticks from `next_frame` when
+    /// `extract_top_predators` is enabled.
+    fn export_top_predator_brains(&self) {
+        if self.predators.is_empty() {
+            return;
+        }
+
+        let dir = std::path::Path::new("top_predators");
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            eprintln!("[top predator export] failed to create dir: {e}");
+            return;
+        }
+
+        // Collect indices sorted by kills desc, then energy desc
+        let mut indices: Vec<usize> = (0..self.predators.len()).collect();
+        indices.sort_by(|&a, &b| {
+            self.predators[b]
+                .lifetime_kills
+                .cmp(&self.predators[a].lifetime_kills)
+                .then_with(|| {
+                    self.predators[b]
+                        .core
+                        .energy
+                        .partial_cmp(&self.predators[a].core.energy)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        });
+
+        let n = Self::TOP_PREDATOR_N.min(indices.len());
+        for rank in 0..n {
+            let pred = &self.predators[indices[rank]];
+            let path = dir.join(format!("gen_{}_rank{}.json", self.frame_count, rank + 1));
+            match serde_json::to_string_pretty(&pred.core.brain) {
+                Ok(json) => {
+                    if let Err(e) = std::fs::write(&path, json) {
+                        eprintln!("[top predator export] failed to write {}: {e}", path.display());
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[top predator export] serialization error: {e}");
+                }
+            }
+        }
     }
 
     pub fn calculate_and_store_next_frame(&mut self) {

@@ -458,6 +458,9 @@ pub struct Predator {
     /// Counter for prey eaten since last reproduction, if >c they reproduce
     pub eaten_prey: i32,
 
+    /// Lifetime kill count (never reset, used for top predator selection)
+    pub lifetime_kills: i32,
+
     /// Cooldown timer preventing immediate re-reproduction (applies per frame)
     pub repro_cooldown: i32,
 }
@@ -492,6 +495,7 @@ impl Predator {
         Self {
             core: AnimalCore::new_with_brain(vec2(x, y), angle, PRED_ENERGY, brain),
             eaten_prey: 0,
+            lifetime_kills: 0,
             repro_cooldown: 0,
         }
     }
@@ -587,8 +591,9 @@ impl Predator {
                 // Gain energy (capped at maximum)
                 self.core.energy = (self.core.energy + PRED_ENERGY_GAIN).min(PRED_ENERGY);
 
-                // Increment kill counter
+                // Increment kill counters
                 self.eaten_prey += 1;
+                self.lifetime_kills += 1;
 
                 // Attempt to reproduce (may succeed if threshold reached)
                 if let Some(child) = self.reproduce(rng) {

@@ -8,10 +8,12 @@ use predator_vs_prey::settings::{self, DEFAULT_DATA_FILE};
 fn main() {
     let mut filename: String = DEFAULT_DATA_FILE.to_string();
     let mut total_frames: i32 = settings::DEFAULT_TOTAL_FRAMES;
+    let mut extract_top_predators = false;
 
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
+            "--top-predators" => extract_top_predators = true,
             "--file" | "-f" => {
                 filename = it.next().unwrap_or_else(|| DEFAULT_DATA_FILE.to_string());
             }
@@ -30,6 +32,7 @@ fn main() {
                 println!("Options:");
                 println!("  --file, -f <path>    Specify the output file path");
                 println!("  --frames, -n <num>   Number of frames to record");
+                println!("  --top-predators      Export top predator brains periodically");
                 println!();
                 println!("Examples:");
                 println!("  cargo run --bin record -- --frames 5000");
@@ -46,11 +49,11 @@ fn main() {
         }
     }
 
-    record(&filename, total_frames);
+    record(&filename, total_frames, extract_top_predators);
 }
 
-fn record(filename: &str, total_frames: i32) {
-    let mut game = Game::new_default(Some(filename));
+fn record(filename: &str, total_frames: i32, extract_top_predators: bool) {
+    let mut game = Game::new_default(Some(filename), extract_top_predators);
 
     // Record headless (no rendering)
     for i in 0..total_frames {

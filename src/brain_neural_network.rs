@@ -10,6 +10,7 @@
 
 use crate::settings::*;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 // ============================================================================
 // ACTIVATION FUNCTIONS
@@ -64,7 +65,7 @@ pub fn act_angle(x: f32) -> f32 {
 // ============================================================================
 
 /// A growing, evolvable neural network with dynamic topology.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NeuralNetwork {
     /// Number of input nodes (sensory inputs from environment)
     pub num_inputs: usize,
@@ -602,5 +603,30 @@ impl NeuralNetwork {
         } else {
             false
         }
+    }
+
+    // ====================================================================
+    // COMPLEXITY METRICS (for NEAT analysis)
+    // ====================================================================
+
+    /// Returns the total number of neurons in the network
+    /// (inputs + bias + outputs + hidden).
+    pub fn num_neurons(&self) -> usize {
+        self.neuron_number
+    }
+
+    /// Returns the number of non-zero connections (weights) in the network.
+    pub fn num_connections(&self) -> usize {
+        let input_conns: usize = self
+            .input_matrix
+            .iter()
+            .map(|row| row.iter().filter(|&&w| w != 0.0).count())
+            .sum();
+        let hidden_conns: usize = self
+            .hidden_matrix
+            .iter()
+            .map(|row| row.iter().filter(|&&w| w != 0.0).count())
+            .sum();
+        input_conns + hidden_conns
     }
 }
