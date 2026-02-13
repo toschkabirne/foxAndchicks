@@ -1,17 +1,12 @@
-// ============================================================================
 // BENCHMARK ARENA & COMPLEXITY LOGGER
-// ============================================================================
+//
 // Loads top predator brains from `top_predators/`, measures their structural
 // complexity (neuron & connection counts), and tests each brain in a
 // controlled arena to measure hunting effectiveness.
 //
 // Usage:
-//   cargo run --release --bin arena_test              # CSV-only (headless)
+//   cargo run --release --bin arena_test > results.csv        # CSV-only (headless)
 //   cargo run --release --bin arena_test -- --visual  # watch each arena live
-//
-// Output (headless): CSV to stdout
-//   Generation,Avg_Kills,Num_Neurons,Num_Connections
-// ============================================================================
 
 use predator_vs_prey::brain_neural_network::NeuralNetwork;
 use predator_vs_prey::data_manager::Frame;
@@ -34,18 +29,12 @@ const ARENA_RUNS: usize = 5;
 /// top predator faces the exact same prey distributions and behaviour.
 const ARENA_SEEDS: [u64; ARENA_RUNS] = [42, 123, 256, 789, 1024];
 
-/// Represents a top predator brain loaded from disk together with its generation.
 struct TopPredatorEntry {
     generation: usize,
-    rank: usize, // 1-based rank within the generation (1 = best)
+    rank: usize,
     brain: NeuralNetwork,
 }
 
-/// Scan `top_predators/` for top predator JSON files, parse generation and rank from
-/// filename, and return entries sorted by (generation, rank).
-///
-/// Supports both old format `gen_5000.json` (treated as rank 1) and new
-/// format `gen_5000_rank2.json`.
 fn load_top_predators(dir: &str) -> Vec<TopPredatorEntry> {
     let path = PathBuf::from(dir);
     if !path.is_dir() {
@@ -73,7 +62,6 @@ fn load_top_predators(dir: &str) -> Vec<TopPredatorEntry> {
         // Strip "gen_" prefix and ".json" suffix
         let stem = &name[4..name.len() - 5];
 
-        // Parse generation and optional rank
         let (generation, rank) = if let Some(idx) = stem.find("_rank") {
             let gen: usize = match stem[..idx].parse() {
                 Ok(g) => g,
@@ -115,10 +103,6 @@ fn load_top_predators(dir: &str) -> Vec<TopPredatorEntry> {
     entries
 }
 
-// ---------------------------------------------------------------------------
-//  Arena helpers
-// ---------------------------------------------------------------------------
-
 /// Create a fresh arena game with the given top predator brain injected at centre.
 fn make_arena_game(brain: &NeuralNetwork, seed: u64) -> Game {
     let mut game = Game::new(
@@ -147,10 +131,6 @@ fn run_arena(brain: &NeuralNetwork, seed: u64) -> usize {
     // prey reproduce and final_prey can exceed the initial count.
     game.total_predator_kills()
 }
-
-// ---------------------------------------------------------------------------
-//  Headless mode (CSV output)
-// ---------------------------------------------------------------------------
 
 fn run_headless(top_predators: &[TopPredatorEntry]) {
     println!("Generation,Rank,Avg_Kills,Num_Neurons,Num_Connections");
@@ -208,24 +188,20 @@ async fn run_visual(top_predators: Vec<TopPredatorEntry>) {
     let mut run_kills: Vec<usize> = Vec::new();
 
     loop {
-        // --- All champions done ---
         if champ_idx >= top_predators.len() {
             break;
         }
 
-        // --- Initialise game for current champion + run ---
         if game.is_none() {
             let seed = ARENA_SEEDS[run_index];
             game = Some(make_arena_game(&top_predators[champ_idx].brain, seed));
             tick = 0;
-            // Produce the initial frame so something is visible immediately
             if let Some(ref mut g) = game {
                 last_frame = Some(g.next_frame());
                 tick = 1;
             }
         }
 
-        // --- Input ---
         if is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Q) {
             break;
         }
@@ -243,7 +219,6 @@ async fn run_visual(top_predators: Vec<TopPredatorEntry>) {
             continue;
         }
 
-        // --- Simulation step ---
         if !paused && tick < ARENA_TICKS {
             if let Some(ref mut g) = game {
                 let frame = g.next_frame();
@@ -252,17 +227,15 @@ async fn run_visual(top_predators: Vec<TopPredatorEntry>) {
             }
         }
 
-        // --- Draw (always, even when a run just finished) ---
         clear_background(settings::BACKGROUND_COLOR);
 
         if let Some(ref frame) = last_frame {
             draw_frame(frame, false, None);
 
             let (pred_count, prey_count) = frame.counts();
-            draw_game_stats(pred_count, prey_count, tick);
+            draw_game_stats(pred_count, prey_count, tick, -1, -1);
         }
 
-        // HUD overlay
         let entry = &top_predators[champ_idx];
         let kills_so_far = if let Some(ref g) = game {
             g.total_predator_kills()
@@ -320,10 +293,6 @@ async fn run_visual(top_predators: Vec<TopPredatorEntry>) {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-//  Entry point
-// ---------------------------------------------------------------------------
 
 #[macroquad::main(window_conf)]
 async fn main() {
