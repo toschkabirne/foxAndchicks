@@ -249,7 +249,7 @@ impl Game {
 
         // --- Top predator brain export ---
         if self.extract_top_predators
-            && self.frame_count % TOP_PREDATOR_EXPORT_INTERVAL == 0
+            && self.frame_count.is_multiple_of(TOP_PREDATOR_EXPORT_INTERVAL)
             && !self.predators.is_empty()
         {
             self.export_top_predator_brains();
@@ -366,7 +366,7 @@ impl Game {
 
         // --- Top predator brain export ---
         if self.extract_top_predators
-            && self.frame_count % TOP_PREDATOR_EXPORT_INTERVAL == 0
+            && self.frame_count.is_multiple_of(TOP_PREDATOR_EXPORT_INTERVAL)
             && !self.predators.is_empty()
         {
             self.export_top_predator_brains();
@@ -537,8 +537,8 @@ impl Game {
         });
 
         let n = Self::TOP_PREDATOR_N.min(indices.len());
-        for rank in 0..n {
-            let pred = &self.predators[indices[rank]];
+        for (rank, &idx) in indices.iter().enumerate().take(n) {
+            let pred = &self.predators[idx];
             let path = dir.join(format!("gen_{}_rank{}.json", self.frame_count, rank + 1));
             match serde_json::to_string_pretty(&pred.core.brain) {
                 Ok(json) => {
